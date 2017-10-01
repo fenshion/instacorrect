@@ -1,0 +1,85 @@
+html, body {
+  height: 100%;
+}
+
+#img {
+  width: 21px;
+  display: inline;
+  margin-right: 10px;
+}
+
+#logo {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 1rem;
+  font-weight: bold;
+  margin: 0px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: inline;
+}
+
+#header {
+  min-height: 75px;
+  padding: 10px;
+  z-index: 3;
+}
+
+#sub-header {
+  padding: 20px 10px;
+  font-size: 1rem;
+  top: 0px;
+  left: 0px;
+  z-index: 1;
+  background-color: dodgerblue;
+  color: white;
+}
+
+.stack {
+  box-shadow: 1px 1px 5px 0px rgba(0, 0, 0, 0.2);
+}
+
+#main {
+  flex-grow: 1;
+}
+
+input, textarea, button {outline: none; }
+
+textarea {
+  border: none;
+  padding: 10px;
+  resize: none;
+}
+
+#footer {
+  min-height: 50px;
+  padding: 10px;
+  border-top: 1px solid #e2e2e2;
+}
+
+.correct {
+  color: #1fc778;
+}
+
+.incorrect {
+  color: #e45968;
+}
+
+.w100 {
+  width: 100%;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.corrections {
+  padding: 10px;
+  color: #585858;
+  border-left: 1px solid #e2e2e2;
+  margin: 0px;
+}
+
+.link {
+  color: black;
+  font-size: 16pt;
+}
