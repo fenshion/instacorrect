@@ -27,7 +27,9 @@ This dataset will be split up in three parts: traning (99%), validation (1%) and
 
 ## Model Definition
 The model definition follows the implementation of Schmaltz and Kim in [*Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*](https://arxiv.org/abs/1604.04677).
+<p>
 <img align="center" src="https://github.com/maximedb/instacorrect/blob/master/Misc/model_arch.PNG" alt="Model from Schamtz & Kim">
+</p>
 1. The inputs are the characters from erroneous sentences batched together: `[batch_size, max_sentence_length, max_word_length]`
    The inputs are zero padded.
 2. The inputs are then embedded in a vector of dimension 30. The result is a tensor of shape `[batch_size, max_sentence_length, max_word_length, embedded_size]`
