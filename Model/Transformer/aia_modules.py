@@ -164,3 +164,28 @@ def label_smoothing(inputs, epsilon=0.1):
     return ((1-epsilon) * inputs) + (epsilon / K)
 
 def normalize(inputs, epsilon=1e-8):
+    pass
+
+def decode_step(encoder_outputs, decoder_inputs, num_blocks):
+    """ Perform a decode step on a given set of encoder_outputs
+    and decoder_inputs."""
+    for i in range(num_blocks):
+        with tf.variable_scope('num_blocks_{}'.format(i))
+        # Multihead attention (self attention)
+        decoder_outputs = multihead_attention(queries=decoder_outputs,
+                                              keys=decoder_inputs,
+                                              num_units=512,
+                                              num_heads=8,
+                                              dropout=0.8,
+                                              causality=True,
+                                              scope="self_attention")
+
+        decoder_outputs = multihead_attention(queries=decoder_outputs,
+                                              keys=encoder_inputs,
+                                              num_units=512,
+                                              num_heads=8,
+                                              dropout=0.8,
+                                              causality=False,
+                                              scope="vanilla_attention")
+        decoder_outputs = feedforward(decoder_outputs)
+    return decoder_outputs

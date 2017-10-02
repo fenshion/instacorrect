@@ -6,17 +6,17 @@ Created on Wed Sep 27 21:39:53 2017
 """
 
 import tensorflow as tf
-from aia_modules import char_convolution, positional_encoding, multihead_attention, feedforward
+from aia_modules import char_convolution, positional_encoding, multihead_attention, feedforward, decode_step
 
 def aiamodel(features, labels, mode, params):
     """
     Tansformer model from "Attention is all you need"
     """
     with tf.variable_scope('ModelParams'):
-        batch_size = tf.shape(features['sequence'])[0]
-        timesteps = tf.shape(features['sequence'])[1]
-        maxwordlength = tf.shape(features['sequence'])[2]
-        c_embed_s = params['char_embedding_size']
+        batch_size = tf.shape(features['sequence'])[0] # the current batch size
+        timesteps = tf.shape(features['sequence'])[1] # The number of unrollings for the encoder
+        maxwordlength = tf.shape(features['sequence'])[2] # Maximum length of words in the batch
+        c_embed_s = params['char_embedding_size'] # The embedding size of characters
         dropout = params['d ropout']
         hidden_size = params['hidden_size']
         network_depth = params['network_depth']
@@ -39,13 +39,6 @@ def aiamodel(features, labels, mode, params):
         # Map the result to the 512 dimension
         conv_inputs = tf.layers.dense(conv_inputs, 512)
 
-        embedded_outputs = tf.nn.embedding_lookup(embeddings_c, labels['sequence'])
-        # Apply a character convolution on the characters
-        conv_outputs = char_convolution(embedded_outputs, kernels, kernel_features,
-                                        reuse=True)
-        # Map the result to the 512 dimension
-        conv_outputs = tf.layers.dense(conv_outputs, 512)
-
     with tf.variable_scope('Encoder'):
         position_embeddings = positional_encoding(conv_outputs,
                                                   ultimate_sequ_len, 512)
@@ -67,43 +60,32 @@ def aiamodel(features, labels, mode, params):
         # available at inference time.
         # Should replace the first character of every sequence with the
         # go character. output is of the shape [batc, seqlen, wordlen]
-        decoder_outputs = labels['sequence']
-        shape_deco = tf.shape(decoder_outputs)
-        go_char = tf.fill([shape_deco[0], 1, shape_deco[2]], params['go_char'])
-        decoder_inputs = tf.concat([go_char, decoder_outputs[:, :-1, :]], axis=2)
 
-        embedded_outputs = tf.nn.embedding_lookup(embeddings_c, decoder_inputs)
-        # Apply a character convolution on the characters
-        decoder_inputs_e = char_convolution(embedded_outputs, kernels, kernel_features,
-                                        reuse=True)
-        # Map the result to the 512 dimension
-        decoder_inputs_e = tf.layers.dense(decoder_inputs, 512)
-        output_pos_embbed = positional_encoding(decoder_inputs_e,
-                                              ultimate_sequ_len, 512)
-        # Add the positional embeddings
-        decoder_inputs += output_pos_embbed
-        # Add dropout on the decoder inputs.
-        decoder_inputs = tf.layers.dropout(decoder_inputs, rate=dropout)
-        decoder_outputs = decoder_inputs
-        for i in range(params['num_blocks']):
-            with tf.variable_scope('num_blocks_{}'.format(i))
-            # Multihead attention (self attention)
-            decoder_outputs = multihead_attention(queries=decoder_outputs,
-                                                  keys=decoder_inputs,
-                                                  num_units=512,
-                                                  num_heads=8,
-                                                  dropout=0.8,
-                                                  causality=True,
-                                                  scope="self_attention")
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            go_char = tf.fill([batch_size, 1, 10], params['go_char'])
+            decoder_inputs = go_char
+            # tf.while now
+        else:
+            # Training time
+            decoder_outputs = labels['sequence']
+            shape_deco = tf.shape(decoder_outputs)
+            go_char = tf.fill([shape_deco[0], 1, shape_deco[2]], params['go_char'])
+            decoder_inputs = tf.concat([go_char, decoder_outputs[:, :-1, :]], axis=2)
+            # Embed the characters
+            embedded_outputs = tf.nn.embedding_lookup(embeddings_c, decoder_inputs)
+            # Apply a character convolution on the characters
+            decoder_inputs_e = char_convolution(embedded_outputs, kernels, kernel_features,
+                                            reuse=True)
+            # Map the result to the 512 dimension
+            decoder_inputs_e = tf.layers.dense(decoder_inputs, 512)
+            output_pos_embbed = positional_encoding(decoder_inputs_e,
+                                                  ultimate_sequ_len, 512)
+            # Add the positional embeddings
+            decoder_inputs += output_pos_embbed
+            # Add dropout on the decoder inputs.
+            decoder_inputs = tf.layers.dropout(decoder_inputs, rate=dropout)
+            decoder_outputs = decode_step(encoder_inputs, decoder_inputs, params['num_blocks'])
 
-            decoder_outputs = multihead_attention(queries=decoder_outputs,
-                                                  keys=encoder_inputs,
-                                                  num_units=512,
-                                                  num_heads=8,
-                                                  dropout=0.8,
-                                                  causality=False,
-                                                  scope="vanilla_attention")
-            decoder_outputs = feedforward(decoder_outputs)
 
     # Final layer projection
     with tf.variable_scope('final_layer'):
