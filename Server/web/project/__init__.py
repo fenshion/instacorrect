@@ -14,8 +14,12 @@ import sys
 from flask import Flask, request, jsonify, render_template
 import json
 import os
+import nltk
+nltk.download('punkt')
+nltk.download('perluniprops')
 from nltk.tokenize import sent_tokenize, word_tokenize
 from correct import correct_sentence
+
 app = Flask(__name__)
 
 @app.route('/')
