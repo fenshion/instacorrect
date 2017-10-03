@@ -25,8 +25,8 @@ model_params = {'char_vocab_size': len(char_vocab),
                 'char_embedding_size': 25, 
                 'dropout': 0.8,
                 'hidden_size': 512,
-                'learning_rate': 0.0001,
-                'decay_steps': 10000,
+                'learning_rate': 0.00001,
+                'decay_steps': 100000,
                 'network_depth': 2,
                 'kernels': [2, 3, 4, 5],
                 'kernel_features': [200, 200, 200, 200],
@@ -105,29 +105,12 @@ def inference(rng):
 
 def export():
     """Export the last saved graph"""
-    char_vocab = get_vocab('../Data/data/vocab/char_vocab_dict.json')
-    word_vocab = get_vocab('../Data/data/vocab/words_vocab_dict.json')
-    # Parameters given to the estimator. Mainly the size of the vocabulary
-    # the embedding size to use and the (keep) drop out percentage
-    os.environ['TF_CONFIG'] = json.dumps({'environment': 'local'})
     # Create a run config
     config = tf.contrib.learn.RunConfig(save_checkpoints_secs=60*30, # Every 30 min
                                         log_device_placement=True,
                                         tf_random_seed=0,
                                         save_summary_steps=1000)
-    model_params = {'char_vocab_size': len(char_vocab), 
-                    'char_embedding_size': 25, 
-                    'dropout': 1,
-                    'hidden_size': 512,
-                    'learning_rate': 0.00001,
-                    'decay_steps': 100000,
-                    'network_depth': 2,
-                    'kernels': [2, 3, 4, 5],
-                    'kernel_features': [200, 200, 200, 200],
-                    'word_vocab_size': len(word_vocab),
-                    'word_embedding_size': 300,
-                    'start_token': word_vocab['|GOO|'],
-                    'end_token': word_vocab['|EOS|']}
+   
     estimator = tf.estimator.Estimator(model_fn=cnnlstm, 
                                        model_dir="output/", 
                                        params=model_params, 

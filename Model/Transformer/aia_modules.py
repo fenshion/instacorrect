@@ -7,6 +7,7 @@ Created on Tue Sep 26 20:07:39 2017
 
 import numpy as np
 import tensorflow as tf
+import math
 
 def conv2d(input_, output_dim, k_h, k_w, name="conv2d", reuse=None):
     # cnn_inputs, kernel_feature_size, 1, kernel_size
@@ -19,10 +20,11 @@ def char_convolution(inputs, kernels, kernel_features, scope="char_convolution",
     with tf.variable_scope(scope, reuse=reuse):
         # Given an input of shape [batch, s_length, w_length, embed_dim]
         # performs a 1D convolutions with multiple kernel sizes.
+        batch_si = tf.shape(inputs)[0]
         s_length = tf.shape(inputs)[1]
         w_length = tf.shape(inputs)[2]
         e_length = tf.shape(inputs)[3]
-        cnn_inputs = tf.reshape(inputs, [batch_size*s_length, w_length, e_length])
+        cnn_inputs = tf.reshape(inputs, [batch_si*s_length, w_length, e_length])
         # Expand the second dimension for convolution purposes
         cnn_inputs = tf.expand_dims(cnn_inputs, 1)
         # Layer to hold all of the convolution results
@@ -39,19 +41,19 @@ def char_convolution(inputs, kernels, kernel_features, scope="char_convolution",
         # Concat the results along the second axis to give words embeddings
         cnn_output = tf.concat(layers, 1)
         # Reshape it to match sequence length
-        cnn_output = tf.reshape(cnn_output, [batch_size, timesteps, sum(kernel_features)])
+        cnn_output = tf.reshape(cnn_output, [batch_si, s_length, sum(kernel_features)])
         return cnn_output
 
-def positional_encoding(inputs, max_len, num_units, scope="pos_embedding", reuse=None):
+def positional_encoding_table(max_len, num_units, scope="pos_embedding", reuse=None):
     """Returns the sinusoidal encodings matrix
     inputs: matrix with the inputs
     max_len: the max timesteps of the model
     num_units: the dimension to encode every timestep in (512)
     """
-    with tf.variable_scope(scope, reuse=reuse)
+    with tf.variable_scope(scope, reuse=reuse):
         # Variable like [1, 2, ... max_len]*batch_size
-        input_one = tf.tile(tf.expand_dims(tf.range(tf.shape(inputs)[1]), 0),
-                                                    [tf.shape(inputs)[0], 1])
+#        input_one = tf.tile(tf.expand_dims(tf.range(tf.shape(inputs)[1]), 0),
+#                                                    [tf.shape(inputs)[0], 1])
         position_enc = np.array([
             [pos / np.power(10000, 2*i/num_units) for i in range(num_units)]
             for pos in range(max_len)])
@@ -60,12 +62,12 @@ def positional_encoding(inputs, max_len, num_units, scope="pos_embedding", reuse
         position_enc[:, 1::2] = np.cos(position_enc[1:, 1::2]) # dim 2i+1
 
         lookup_table = tf.convert_to_tensor(position_enc)
-        outputs = tf.nn.embedding_lookup(lookup_table, input_one)
-        outputs = outputs * math.sqrt(num_units)
-        return outputs
+#        outputs = tf.nn.embedding_lookup(lookup_table, input_one)
+#        outputs = outputs * math.sqrt(num_units)
+        return lookup_table
 
 def embedding(inputs, vocab_size, num_units, scope="embedding", reuse=None):
-    with tf.variable_scope(scope, reuse=True)
+    with tf.variable_scope(scope, reuse=True):
         # Variable that holds the mapping between the ids and their representation
         lookup_table = tf.get_variable('lookup_table',
                            dtype=tf.float32,
@@ -80,9 +82,8 @@ def embedding(inputs, vocab_size, num_units, scope="embedding", reuse=None):
         return outputs * (num_units ** 0.5)
 
 def multihead_attention(queries, keys, num_units=None, num_heads=8, dropout=0,
-                        causality=False, scope="multihead_attention",
-                        reuse=None):
-    with tf.variable_scope(scope, reuse=reuse)
+                        causality=False, scope="multihead_attention", reuse=None):
+    with tf.variable_scope(scope, reuse=reuse):
         num_units = queries.get_shape()[-1]
         projection_dim = num_units / num_heads
         # Variable to store the intermediate multi-head attention
@@ -93,13 +94,10 @@ def multihead_attention(queries, keys, num_units=None, num_heads=8, dropout=0,
             Q = tf.layers.dense(queries, projection_dim)
             K = tf.layers.dense(keys, projection_dim)
             V = tf.layers.dense(keys, projection_dim)
-
             # Multiply the query with the keys to get the attention scores
             scores = tf.matmul(Q, tf.transpose(K))
-
             # Scale the result
             scaled_scores = scores / (K.get_shape()[-1] ** 0.5)
-
             # Mask the scores that are 'illegal'
             # Causality = Future blinding
             if causality:
@@ -118,7 +116,6 @@ def multihead_attention(queries, keys, num_units=None, num_heads=8, dropout=0,
                 # Wheneve the mask equal one, replace the score value with the value
                 # of the padding (-inf)
                 scaled_scores = tf.where(tf.equal(masks, 0), paddings, scaled_scores) # (h*N, T_q, T_k)
-
             # Perform the softmax
             softmax = tf.nn.softmax(scaled_scores)
             # Apply dropout
@@ -166,26 +163,51 @@ def label_smoothing(inputs, epsilon=0.1):
 def normalize(inputs, epsilon=1e-8):
     pass
 
+def is_eos(inputs, eos, batch_size):
+    equal = tf.equal(inputs, eos)
+    axis_reduc = tf.reduce_sum(tf.cast(equal, tf.float32), axis=1)
+    is_eos = tf.reduce_sum(axis_reduc)
+    return tf.equal(is_eos, batch_size)
+
 def decode_step(encoder_outputs, decoder_inputs, num_blocks):
     """ Perform a decode step on a given set of encoder_outputs
     and decoder_inputs."""
     for i in range(num_blocks):
-        with tf.variable_scope('num_blocks_{}'.format(i))
+        with tf.variable_scope('num_blocks_{}'.format(i)):
         # Multihead attention (self attention)
-        decoder_outputs = multihead_attention(queries=decoder_outputs,
-                                              keys=decoder_inputs,
-                                              num_units=512,
-                                              num_heads=8,
-                                              dropout=0.8,
-                                              causality=True,
-                                              scope="self_attention")
-
-        decoder_outputs = multihead_attention(queries=decoder_outputs,
-                                              keys=encoder_inputs,
-                                              num_units=512,
-                                              num_heads=8,
-                                              dropout=0.8,
-                                              causality=False,
-                                              scope="vanilla_attention")
-        decoder_outputs = feedforward(decoder_outputs)
+            decoder_outputs = multihead_attention(queries=encoder_outputs,
+                                                  keys=decoder_inputs,
+                                                  num_units=512,
+                                                  num_heads=8,
+                                                  dropout=0.8,
+                                                  causality=True,
+                                                  scope="self_attention")
+            decoder_outputs = multihead_attention(queries=decoder_outputs,
+                                                  keys=decoder_inputs,
+                                                  num_units=512,
+                                                  num_heads=8,
+                                                  dropout=0.8,
+                                                  causality=False,
+                                                  scope="vanilla_attention")
+            decoder_outputs = feed_forward(decoder_outputs)
     return decoder_outputs
+
+def prepare_encoder_inputs(inputs, kernels, kernel_features, embeddings_c, ult):
+    # Embed the characters
+    inputs = tf.nn.embedding_lookup(embeddings_c, inputs)
+    # Apply a character convolution on the characters
+    inputs = char_convolution(inputs, kernels, kernel_features, reuse=True)
+    # Map the result to the 512 dimension
+    inputs = tf.layers.dense(inputs, 512)
+    output_pos_embbed = positional_encoding(inputs, ult, 512)
+    # Add the positional embeddings
+    inputs += output_pos_embbed
+    return inputs
+    
+    
+def make_table(vocabulary_file):
+    table = tf.contrib.lookup.index_to_string_table_from_file(
+            vocabulary_file, default_value="")
+    tf.tables_initializer().run()
+    return table
+    
