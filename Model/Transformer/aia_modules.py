@@ -128,7 +128,7 @@ def multihead_attention(queries, keys, num_units=None, num_heads=8, dropout=0,
         # Concat the intermediate results
         concat = tf.concat(intermediate_outputs, axis=2)
         # Apply a last linear projection
-        linear = tf.layers.dense(concat, num_units, activation=tf.nn.relu)
+        linear = tf.layers.dense(concat, num_units, activation=None)
         # Residual connection (Add)
         outputs = queries + linear
         # Normalize outputs (Norm)
@@ -169,11 +169,11 @@ def is_eos(inputs, eos, batch_size):
     is_eos = tf.reduce_sum(axis_reduc)
     return tf.equal(is_eos, batch_size)
 
-def decode_step(encoder_outputs, decoder_inputs, num_blocks):
+def decode_step(encoder_outputs, decoder_inputs, num_blocks, reuse=None):
     """ Perform a decode step on a given set of encoder_outputs
     and decoder_inputs."""
     for i in range(num_blocks):
-        with tf.variable_scope('num_blocks_{}'.format(i)):
+        with tf.variable_scope('num_blocks_{}'.format(i), reuse=reuse):
         # Multihead attention (self attention)
             decoder_outputs = multihead_attention(queries=encoder_outputs,
                                                   keys=decoder_inputs,
@@ -181,29 +181,28 @@ def decode_step(encoder_outputs, decoder_inputs, num_blocks):
                                                   num_heads=8,
                                                   dropout=0.8,
                                                   causality=True,
-                                                  scope="self_attention")
+                                                  scope="self_attention",
+                                                  reuse=reuse)
             decoder_outputs = multihead_attention(queries=decoder_outputs,
                                                   keys=decoder_inputs,
                                                   num_units=512,
                                                   num_heads=8,
                                                   dropout=0.8,
                                                   causality=False,
-                                                  scope="vanilla_attention")
+                                                  scope="vanilla_attention",
+                                                  reuse=reuse)
             decoder_outputs = feed_forward(decoder_outputs)
-    return decoder_outputs
+    return decoder_outputs   
 
-def prepare_encoder_inputs(inputs, kernels, kernel_features, embeddings_c, ult):
-    # Embed the characters
-    inputs = tf.nn.embedding_lookup(embeddings_c, inputs)
-    # Apply a character convolution on the characters
-    inputs = char_convolution(inputs, kernels, kernel_features, reuse=True)
-    # Map the result to the 512 dimension
-    inputs = tf.layers.dense(inputs, 512)
-    output_pos_embbed = positional_encoding(inputs, ult, 512)
-    # Add the positional embeddings
-    inputs += output_pos_embbed
-    return inputs
-    
+def encode_positions(embeddings, inputs):
+    input_shape = tf.shape(inputs)
+    timesteps = input_shape[1]
+    batch_size = input_shape[0]
+    hidden_size = input_shape[-1]
+    input_one = tf.tile(tf.expand_dims(tf.range(timesteps), 0), [batch_size, 1])
+    position_emb = tf.nn.embedding_lookup(embeddings, input_one)
+    position_emb = position_emb * math.sqrt(hidden_size)
+    return position_emb
     
 def make_table(vocabulary_file):
     table = tf.contrib.lookup.index_to_string_table_from_file(
