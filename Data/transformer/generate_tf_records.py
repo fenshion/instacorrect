@@ -49,3 +49,7 @@ for filename  in filenames:
 validation_writer.close()
 testing_writer.close()
 training_writer.close()
+
+def create_example(inputs, outputs, word_vocab, char_vocab):
+    """ """
+    

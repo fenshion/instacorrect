@@ -41,6 +41,14 @@ def encode_line_wordwise(line, vocab):
     sequence_length = len(sequence_input)
     return sequence_input, sequence_output, sequence_length
 
+def encode_line_wordwise_transformer(line, vocab):
+    """Given a string and vocab, return the word encoded version"""
+    splited = word_tokenize(line)
+    sequence_input = [vocab.get(word, vocab['|UNK|']) for word in splited]
+    sequence_output = sequence_input + [vocab['|EOS|']]
+    sequence_length = len(sequence_output)
+    return sequence_output, sequence_length
+
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
@@ -55,6 +63,21 @@ def create_example(correct, mistake, word_vocab, char_vocab):
             'mistake_sequence': _int64_feature(m_sequence),
             'mistake_sequence_length': _int64_feature([m_s_l]),
             'mistake_max_word_length':_int64_feature([m_m_w_l])}))
+    return example
+
+def create_example_transformer(inputs, outputs, word_vocab, char_vocab):
+    """Given a string and a label (and a vocab dict), returns a tf.Example"""
+    inp_seq, inp_sl, inp_maxword = encode_line_charwise(inputs, char_vocab)
+    out_seq, out_sl, out_maxword = encode_line_charwise(outputs, char_vocab)
+    out_seq_w, out_sl = encode_line_wordwise_transformer(outputs, word_vocab)
+    example = tf.train.Example(features=tf.train.Features(feature={
+            'input_sequence': _int64_feature(inp_seq),
+            'input_sequence_length': _int64_feature([inp_sl]),
+            'input_sequence_maxword': _int64_feature([inp_maxword]),
+            'output_sequence': _int64_feature(out_seq),
+            'output_sequence_words': _int64_feature(out_seq_w),
+            'output_sequence_length': _int64_feature([out_sl]),
+            'output_sequence_maxword':_int64_feature([out_maxword])}))
     return example
 
 def get_vocab(filename):

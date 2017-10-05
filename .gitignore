@@ -12,7 +12,8 @@ events*
 eval/
 **/eval/
 *.pbtxt
-
+**.json
+words_list.txt
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

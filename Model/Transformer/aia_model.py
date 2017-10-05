@@ -143,9 +143,17 @@ def transformer(features, labels, mode, params):
         logits = tf.layers.dense(decoder_outputs, params['word_vocab_size'])
         # Take the arg max for each, ie, the word id.
         preds = tf.cast(tf.arg_max(logits, dimension=-1), tf.int32)
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            # Return a dict with the sample word ids.
+            predictions = {"sequence": preds}
+            export_outputs = {
+                'prediction': tf.estimator.export.PredictOutput(predictions)
+            }
+            return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions, 
+                                              export_outputs=export_outputs)
         # Compute the cross entropy loss
         crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels['decoder_o'],
-                                                              logits=logits)
+                                                                  logits=logits)
         # Create a mask for padding characters
         target_w = tf.sequence_mask(labels['sequence_length'], dtype=logits.dtype)
         batch_size_32 = tf.cast(batch_size, tf.float32)

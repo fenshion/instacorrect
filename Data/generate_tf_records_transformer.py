@@ -12,12 +12,12 @@ import random
 i = 0
 random.seed(0)
 mistake_generator = Mistake()
-char_vocab = get_vocab('data/char_vocab_dict.json')
-word_vocab = get_vocab('data/words_vocab_dict.json')
+char_vocab = get_vocab('data/vocab/transformer/char_vocab_dict.json')
+word_vocab = get_vocab('data/vocab/transformer/words_vocab_dict.json')
 
-training_writer = tf.python_io.TFRecordWriter("data/training.tfrecord")
-validation_writer = tf.python_io.TFRecordWriter("data/validation.tfrecord")
-testing_writer = tf.python_io.TFRecordWriter("data/testing.tfrecord") 
+training_writer = tf.python_io.TFRecordWriter("data/transformer/training.tfrecord")
+validation_writer = tf.python_io.TFRecordWriter("data/transformer/validation.tfrecord")
+testing_writer = tf.python_io.TFRecordWriter("data/transformer/testing.tfrecord") 
 
 filenames = ["data/europarl-v7.fr-en.fr", "data/news.2014.fr.shuffled.v2"]
 for filename  in filenames:
@@ -38,14 +38,16 @@ for filename  in filenames:
             random_number = random.random()
             if random_number <= 0.005:
                 validation_writer.write(example.SerializeToString())
-            elif random_number <= 0.005:
+            elif random_number <= 0.01:
                 testing_writer.write(example.SerializeToString())
             else:
                 training_writer.write(example.SerializeToString())
             i += 1
             if i % 10000 == 0:
+                break
                 print('Starting line number {i}'.format(i=str(i)))
 
 validation_writer.close()
 testing_writer.close()
 training_writer.close()
+    
