@@ -160,9 +160,6 @@ def label_smoothing(inputs, epsilon=0.1):
     K = inputs.get_shape()[-1]
     return ((1-epsilon) * inputs) + (epsilon / K)
 
-def normalize(inputs, epsilon=1e-8):
-    pass
-
 def is_eos(inputs, eos, batch_size):
     equal = tf.equal(inputs, eos)
     axis_reduc = tf.reduce_sum(tf.cast(equal, tf.float32), axis=1)

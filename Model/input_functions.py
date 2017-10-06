@@ -14,14 +14,14 @@ spec = {"correct_sequence_input": tf.VarLenFeature(tf.int64),
         "mistake_sequence_length": tf.FixedLenFeature((), tf.int64, default_value=0),
         "mistake_max_word_length": tf.FixedLenFeature((), tf.int64, default_value=0)}
 
-def _parse_function(example_proto):
+def _parse_function(example_proto, at_training=True):
     """Function in charge of parsing a tf.example into a tensors"""
     # Parse the tf.example according to the features_spec definition
     parsed_features = tf.parse_single_example(example_proto, spec)
     # Sparse tensor 
-    c_sequence_input_sparse = parsed_features['correct_sequence_input']
+    input_sparse = parsed_features['correct_sequence_input']
     # tensor with all the correct sentence encoded with ids [245, 245, ...]
-    c_sequence_input_dense = tf.sparse_to_dense(c_sequence_input_sparse.indices, 
+    input_dense = tf.sparse_to_dense(c_sequence_input_sparse.indices, 
                                c_sequence_input_sparse.dense_shape, 
                                c_sequence_input_sparse.values)
     # Sparse tensor 
