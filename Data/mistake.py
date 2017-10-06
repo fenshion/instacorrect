@@ -314,26 +314,31 @@ class Mistake(object):
     """
 
     def __init__(self):
-        self.methods = [(pat, rep) for pat, rep in regex]
+        self.methods = [[pat, rep, 0] for pat, rep in regex]
         self.num_methods = len(regex)
         self.pointers = [i for i in range(len(regex))]
+        self.total_mistakes = 1.0
 
     def gen_mistake(self, sentence):
         """
         Returns a sentence with a mistake
         """
         counter = 0
-        num_mistakes = len(sentence) // 10
+        num_mistakes = len(sentence) // 15
         is_done = False
         for i in range(self.num_methods):
             pointer = random.choice(self.pointers)
             pattern = self.methods[pointer][0]
             if re.search(pattern, sentence):
                 choice = random.randint(0,100)
-                if choice <= 50:
+                threshold = (1 - (self.methods[pointer][2] / self.total_mistakes)**0.25)*100
+                print('choice of {choice} with a threshold of {threshold}'.format(choice=choice, threshold=threshold))
+                if choice <= threshold:
                     counter += 1
                     replace = self.methods[pointer][1]
                     sentence = re.sub(pattern, replace, sentence, count=1)
+                    self.methods[pointer][2] = self.methods[pointer][2] + 1
+                    self.total_mistakes += 1
             if counter >= num_mistakes:
                 is_done = True
                 break
@@ -353,5 +358,7 @@ if __name__ == '__main__':
     #mistakes = mistake.generate_mistakes(u'L\'entreprise est initialement une société de commerce de gros et de détail, principalement de tissus mais également de produits de quincaillerie3. Le développement du jean transformera radicalement la compagnie.')
     #for m in mistakes:
     #    print(m.encode('utf-8'))
-    mistakes = mistake.gen_mistake(u'L\'entreprise est initialement ta une société de commerce de gros et de détail, principalement de tissus mais également de produits de quincaillerie. Le développement du jean transformera radicalement la compagnie.')
+    for i in range(1000):
+        print('new')
+        mistakes = mistake.gen_mistake(u'L\'entreprise est initialement ta une société de commerce de gros et de détail, principalement de tissus mais également de produits de quincaillerie. Le développement du jean transformera radicalement la compagnie.')
     print(mistakes)

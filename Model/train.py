@@ -40,7 +40,7 @@ epochs = 10
 # and testing dataset
 # Lambda function used in the experiment. Returns a dataset iterator
 data_train = lambda: input_fn("../Data/data/training.tfrecord", batch,
-                              epochs, skip=3000000)
+                              epochs)
 data_valid = lambda: input_fn("../Data/data/validation.tfrecord", batch, 
                               epochs, batch*250)
 
@@ -120,37 +120,46 @@ def export():
 def input_inspection():
     """Inspect the inputs for inconsistency"""
 
-    reverse_char_vocab = get_vocab('../Data/data/char_vocab_reve.json')
-    char_vocab = get_vocab('../Data/data/char_vocab_dict.json')
-    reverse_word_vocab = get_vocab('../Data/data/words_vocab_reve.json')
+    reverse_char_vocab = get_vocab('../Data/data/vocab/char_vocab_reve.json')
+    char_vocab = get_vocab('../Data/data/vocab/char_vocab_dict.json')
+    reverse_word_vocab = get_vocab('../Data/data/vocab/words_vocab_reve.json')
     
-    features, labels = input_fn("../Data/data/testing.tfrecord", 5, 1)
+    features, labels = input_fn("../Data/data/training.tfrecord", 25, 1, take=1000)
     sess = tf.Session()
-    feat, labl = sess.run([features, labels])
-    sentences = feat['sequence']
-    correct_input = labl['sequence_input']
-    correct_output = labl['sequence_output']
+    features, labels = sess.run([features, labels])
+    print(features)
+    inputs = features['input']
+    output = labels['output']
+    output_chars = labels['output_chars']
     
     pad_char = char_vocab['|PAD|']
-    for i in range(sentences.shape[0]):
-        shape = sentences[i,:,:].shape
-        sentence = sentences[i,:,:].tolist()
-        for x in range(shape[0]):
-            for y in range(shape[1]):
+    for i in range(inputs.shape[0]):
+        shape = inputs[i,:,:].shape
+        sentence = inputs[i,:,:].tolist()
+        for x in range(shape[0]): # Number of words
+            for y in range(shape[1]): # Words length
                 if sentence[x][y] != pad_char:
                     print(reverse_char_vocab.get(str(sentence[x][y]), '<UNK>'), end='')
             print(' ', end='')
         print('END')
         print('****')
     
-    for i in range(correct_input.shape[0]):
-        ids = correct_input[i,:].tolist()
+    for i in range(output_chars.shape[0]):
+        shape = output_chars[i,:,:].shape
+        sentence = output_chars[i,:,:].tolist()
+        for x in range(shape[0]): # Number of words
+            for y in range(shape[1]): # Words length
+                if sentence[x][y] != pad_char:
+                    print(reverse_char_vocab.get(str(sentence[x][y]), '<UNK>'), end='')
+            print(' ', end='')
+        print('END')
+        print('****')
+    
+    for i in range(output.shape[0]):
+        ids = output[i,:].tolist()
         words = [reverse_word_vocab.get(str(wid)) for wid in ids]
         print(" ".join(words))
         
-        ids = correct_output[i,:].tolist()
-        words = [reverse_word_vocab.get(str(wid)) for wid in ids]
-        print(" ".join(words))
 
 if __name__ == "__main__":
     

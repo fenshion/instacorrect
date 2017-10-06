@@ -52,31 +52,18 @@ def encode_line_wordwise_transformer(line, vocab):
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
-def create_example(correct, mistake, word_vocab, char_vocab):
-    """Given a string and a label (and a vocab dict), returns a tf.Example"""
-    m_sequence, m_s_l, m_m_w_l = encode_line_charwise(mistake, char_vocab)
-    c_sequence_i, c_sequence_o, c_s_l, = encode_line_wordwise(correct, word_vocab)
-    example = tf.train.Example(features=tf.train.Features(feature={
-            'correct_sequence_input': _int64_feature(c_sequence_i),
-            'correct_sequence_output': _int64_feature(c_sequence_o),
-            'correct_sequence_length': _int64_feature([c_s_l]),
-            'mistake_sequence': _int64_feature(m_sequence),
-            'mistake_sequence_length': _int64_feature([m_s_l]),
-            'mistake_max_word_length':_int64_feature([m_m_w_l])}))
-    return example
-
-def create_example_transformer(inputs, outputs, word_vocab, char_vocab):
+def create_example(inputs, outputs, word_vocab, char_vocab):
     """Given a string and a label (and a vocab dict), returns a tf.Example"""
     inp_seq, inp_sl, inp_maxword = encode_line_charwise(inputs, char_vocab)
-    out_seq, out_sl, out_maxword = encode_line_charwise(outputs, char_vocab)
-    out_seq_w, out_sl = encode_line_wordwise_transformer(outputs, word_vocab)
+    out_seq, out_sl1, out_maxword = encode_line_charwise(outputs, char_vocab)
+    out_seq_w, out_sl2 = encode_line_wordwise_transformer(outputs, word_vocab)
     example = tf.train.Example(features=tf.train.Features(feature={
             'input_sequence': _int64_feature(inp_seq),
             'input_sequence_length': _int64_feature([inp_sl]),
             'input_sequence_maxword': _int64_feature([inp_maxword]),
             'output_sequence': _int64_feature(out_seq),
             'output_sequence_words': _int64_feature(out_seq_w),
-            'output_sequence_length': _int64_feature([out_sl]),
+            'output_sequence_length': _int64_feature([out_sl1]),
             'output_sequence_maxword':_int64_feature([out_maxword])}))
     return example
 
