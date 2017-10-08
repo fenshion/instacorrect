@@ -8,12 +8,17 @@ import tensorflow as tf
 
 # Mapping of tf.example features used in two places. One for the two.
 spec = {'input_sequence': tf.VarLenFeature(tf.int64),
-        'input_sequence_length': tf.FixedLenFeature((), tf.int64, default_value=0),
-        'input_sequence_maxword': tf.FixedLenFeature((), tf.int64, default_value=0),
+        'input_sequence_length': tf.FixedLenFeature((), tf.int64,
+                                                    default_value=0),
+        'input_sequence_maxword': tf.FixedLenFeature((), tf.int64,
+                                                     default_value=0),
         'output_sequence': tf.VarLenFeature(tf.int64),
         'output_sequence_words': tf.VarLenFeature(tf.int64),
-        'output_sequence_length': tf.FixedLenFeature((), tf.int64, default_value=0),
-        'output_sequence_maxword': tf.FixedLenFeature((), tf.int64, default_value=0)}
+        'output_sequence_length': tf.FixedLenFeature((), tf.int64,
+                                                     default_value=0),
+        'output_sequence_maxword': tf.FixedLenFeature((), tf.int64,
+                                                      default_value=0)}
+
 
 def _parse_function(example_proto, at_training=True):
     """Function in charge of parsing a tf.example into a tensors"""
@@ -24,48 +29,52 @@ def _parse_function(example_proto, at_training=True):
     # Sparse input tensor
     input_sparse = parsed_features['input_sequence']
     # Convert the sparse input to dense.
-    input_dense = tf.sparse_to_dense(input_sparse.indices, 
-                               input_sparse.dense_shape, 
-                               input_sparse.values)
+    input_dense = tf.sparse_to_dense(input_sparse.indices,
+                                     input_sparse.dense_shape,
+                                     input_sparse.values)
     # Convert it to a 4D tensor
     input_sl = parsed_features['input_sequence_length']
     input_ml = parsed_features['input_sequence_maxword']
-    input_dense_2 = tf.reshape(input_dense, 
-                                        tf.stack([
-                                            tf.cast(input_sl, tf.int32),
-                                            tf.cast(input_ml, tf.int32)]))
+    input_dense_2 = tf.reshape(input_dense,
+                               tf.stack([tf.cast(input_sl, tf.int32),
+                                         tf.cast(input_ml, tf.int32)]))
     to_return += (input_dense_2, input_sl)
-    
+
     # OUTPUTS
     if at_training:
         output_sparse = parsed_features['output_sequence_words']
         output_sl = parsed_features['output_sequence_length']
         output_ml = parsed_features['output_sequence_maxword']
-        output_dense = tf.sparse_to_dense(output_sparse.indices, 
-                               output_sparse.dense_shape, 
-                               output_sparse.values)
-        output_chars_sparse = parsed_features['output_sequence']
-        output_chars_dense = tf.sparse_to_dense(output_chars_sparse.indices, 
-                               output_chars_sparse.dense_shape, 
-                               output_chars_sparse.values)
-        output_chars_dense_2 = tf.reshape(output_chars_dense, 
-                                        tf.stack([
-                                            tf.cast(output_sl, tf.int32),
-                                            tf.cast(output_ml, tf.int32)]))
-        to_return += (output_dense, output_chars_dense_2, output_sl) 
-        
+        output_dense = tf.sparse_to_dense(output_sparse.indices,
+                                          output_sparse.dense_shape,
+                                          output_sparse.values)
+        output_char_sparse = parsed_features['output_sequence']
+        output_chars_dense = tf.sparse_to_dense(output_char_sparse.indices,
+                                                output_char_sparse.dense_shape,
+                                                output_char_sparse.values)
+        output_chars_dense_2 = tf.reshape(output_chars_dense,
+                                          tf.stack([tf.cast(output_sl,
+                                                            tf.int32),
+                                                    tf.cast(output_ml,
+                                                            tf.int32)]))
+        to_return += (output_dense, output_chars_dense_2, output_sl)
+
     return to_return
+
 
 def bucketing_fn(sequence_length, buckets):
     """Given a sequence_length returns a bucket id"""
-    # Clip the buckets at sequence length and return the first argmax, the bucket id
+    # Clip the buckets at sequence length and return the first argmax,
+    # the bucket id
     t = tf.clip_by_value(buckets, 0, sequence_length)
     return tf.argmax(t)
 
+
 def reduc_fn(key, elements, window_size):
-    """Receives `window_size` elements"""
+    """ Receives `window_size` elements """
     # Shuffle within each bucket
     return elements.shuffle(window_size, seed=0)
+
 
 def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
     """
@@ -75,8 +84,8 @@ def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
         seq_filename: a string with the path for the tf.records to read
         batch_size: the batch size to use
         num_epochs: the number of times to read the entire dataset
-    """    
-    # Create a dataset out of the raw TFRecord file. See the Data Generator for more
+    """
+    # Create a dataset out of the raw TFRecord file. See the Data Generator
     dataset = tf.contrib.data.TFRecordDataset(filenames)
     # Skip X elements
     dataset = dataset.skip(skip)
@@ -87,19 +96,21 @@ def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
     # Repeat the dataset for a given number of epoch
     dataset = dataset.repeat(num_epochs)
     # Create an arbitrary bucket range.
-    buckets = [tf.constant(num, dtype=tf.int64) for num in range(0, 100, 5)]
+    buckets = [tf.constant(num, dtype=tf.int64) for num in range(0, 150, 2)]
     # Number of elements per bucket.
     window_size = 1000*batch_size
     # Group the dataset according to a bucket key (see bucketing_fn).
     # Every element in the dataset is attributed a key (here a bucket id)
-    # The elements are then bucketed according to these keys. A group of 
-    # `window_size` having the same keys are given to the reduc_fn. 
-    dataset = dataset.group_by_window(
-            lambda a,b,c,d,e: bucketing_fn(b, buckets), 
-            lambda key, x: reduc_fn(key, x, window_size), window_size)
+    # The elements are then bucketed according to these keys. A group of
+    # `window_size` having the same keys are given to the reduc_fn.
+    dataset = dataset.group_by_window(lambda a, b, c, d, e:
+                                      bucketing_fn(b, buckets),
+                                      lambda key, x:
+                                      reduc_fn(key, x, window_size),
+                                      window_size)
     # We now have buckets of `window_size` size, let's batch and pad them
     dataset = dataset.padded_batch(batch_size, padded_shapes=(
-        (tf.Dimension(None), tf.Dimension(None)), 
+        (tf.Dimension(None), tf.Dimension(None)),
         tf.TensorShape([]),
         tf.Dimension(None),
         (tf.Dimension(None), tf.Dimension(None)),
@@ -107,9 +118,10 @@ def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
     ))
     # Let's now make it a bit more easy to understand this dataset by mapping
     # each feature.
-    dataset = dataset.map(lambda a, b, c, d, e: 
-        ({"input": a, "input_length": b}, 
-         {"output": c, "output_chars": d, "output_length": e}))
+    dataset = dataset.map(lambda a, b, c, d, e:
+                          ({"input": a, "input_length": b},
+                           {"output": c, "output_chars": d, "output_length": e}
+                           ))
     # Create the iterator to enumerate the elements of the dataset.
     iterator = dataset.make_one_shot_iterator()
     # Generator returned by the iterator.
@@ -123,27 +135,6 @@ def serving_input_receiver_fn():
     serialized_tf_example = tf.placeholder(dtype=tf.string, shape=None)
     # Dict to be passed to ServingInputReceiver -> input signature
     receiver_tensors = {'examples': serialized_tf_example}
-    input_dense, input_sl = tf.parse_example(_parse_function, at_training=False)
-#    # Parse the example to a dict of features
-#    parsed_features = tf.parse_example(serialized_tf_example, spec)
-#    mistake_sequence_sparse = parsed_features['mistake_sequence']
-#    mistake_sequence_dense = tf.sparse_to_dense(mistake_sequence_sparse.indices, 
-#                               mistake_sequence_sparse.dense_shape, 
-#                               mistake_sequence_sparse.values)
-#    mistake_sequence_length = parsed_features['mistake_sequence_length']
-#    mistake_max_word_length = parsed_features['mistake_max_word_length']
-#    # Tensor with the words encoded at the character level. To be able to add
-#    # it to a tf.example (which accepts only 1D list), the words are all the 
-#    # same dimension and should be reshaped once converted to dense.
-#    # the max_word_length is used for that.
-#    # [1, 0, 0, 1, 1, 0, 1, 1, 1] => [[1, 0, 0], [1, 1, 0], [1, 1, 1]]
-#    # This will result in words as rows, should be as column.
-#    mistake_sequence_dense = tf.reshape(mistake_sequence_dense, 
-#                                    tf.stack([
-#                                        tf.cast(mistake_sequence_length[0], tf.int32),
-#                                        tf.cast(mistake_max_word_length[0], tf.int32)
-#                                        ]))
-#    mistake_sequence_dense = tf.expand_dims(mistake_sequence_dense, 0)
-    # The dict of features passed to the ServingInputReceiver
-    features = {'input': input_dense, 'input_length': input_sl}
+    input_d, input_sl = tf.parse_example(_parse_function, at_training=False)
+    features = {'input': input_d, 'input_length': input_sl}
     return tf.estimator.export.ServingInputReceiver(features, receiver_tensors)
