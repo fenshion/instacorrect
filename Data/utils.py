@@ -28,8 +28,8 @@ def encode_line_charwise(line, vocab):
     sequence = []
     pad_char = vocab.get('|PAD|')
     for word in splited:
-        word_encoded = vocab.get('{') + [vocab.get(char, vocab['|UNK|'])
-                                         for char in word] + vocab.get('}')
+        word_encoded = [vocab.get('{')] + [vocab.get(char, vocab['|UNK|'])
+                                           for char in word] + [vocab.get('}')]
         word_encoded += [pad_char]*(max_word_length - len(word_encoded))
         sequence.extend(word_encoded)
     return sequence, sequence_length, max_word_length

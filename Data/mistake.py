@@ -1,11 +1,9 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 Created on Thu Jun 01 15:36:48 2017
 """
 
 import random
-import re 
+import re
 
 regex = [
     (r'(e)\b', ''),
@@ -308,11 +306,12 @@ regex = [
     (r'(envoyé)\b', 'envoié')
 ]
 
+
 class Mistake(object):
     """
-    Give it a sentence, it will mess it up and return lots of sentence with mistakes in them
+    Give it a sentence, it will mess it up and return lots of sentence
+    with mistakes in them
     """
-
     def __init__(self):
         self.methods = [[pat, rep, 0] for pat, rep in regex]
         self.num_methods = len(regex)
@@ -330,9 +329,9 @@ class Mistake(object):
             pointer = random.choice(self.pointers)
             pattern = self.methods[pointer][0]
             if re.search(pattern, sentence):
-                choice = random.randint(0,100)
-                threshold = (1 - (self.methods[pointer][2] / self.total_mistakes)**0.25)*100
-                print('choice of {choice} with a threshold of {threshold}'.format(choice=choice, threshold=threshold))
+                choice = random.randint(0, 100)
+                threshold = (1 - (self.methods[pointer][2] /
+                                  self.total_mistakes)**0.25)*100
                 if choice <= threshold:
                     counter += 1
                     replace = self.methods[pointer][1]
@@ -343,7 +342,7 @@ class Mistake(object):
                 is_done = True
                 break
         if not is_done:
-            position = random.randint(2,len(sentence)-2)
+            position = random.randint(2, len(sentence)-2)
             sent1 = sentence[:position-1]
             sent2 = sentence[position:]
             sent3 = sentence[position-1]
@@ -354,11 +353,10 @@ class Mistake(object):
 
 if __name__ == '__main__':
     mistake = Mistake()
-    #print(mistake.methods)
-    #mistakes = mistake.generate_mistakes(u'L\'entreprise est initialement une société de commerce de gros et de détail, principalement de tissus mais également de produits de quincaillerie3. Le développement du jean transformera radicalement la compagnie.')
-    #for m in mistakes:
-    #    print(m.encode('utf-8'))
     for i in range(1000):
         print('new')
-        mistakes = mistake.gen_mistake(u'L\'entreprise est initialement ta une société de commerce de gros et de détail, principalement de tissus mais également de produits de quincaillerie. Le développement du jean transformera radicalement la compagnie.')
+        mistakes = mistake.gen_mistake(u'L\'entreprise est initialement ta une \
+        société de commerce de gros et de détail, principalement de tissus \
+        mais également de produits de quincaillerie. Le développement du jean\
+         transformera radicalement la compagnie.')
     print(mistakes)

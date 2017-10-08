@@ -12,8 +12,8 @@ import random
 i = 0
 random.seed(0)
 mistake_generator = Mistake()
-c_vocab = get_vocab('data/char_vocab_dict.json')
-w_vocab = get_vocab('data/words_vocab_dict.json')
+c_vocab = get_vocab('data/vocab/char_vocab_dict.json')
+w_vocab = get_vocab('data/vocab/words_vocab_dict.json')
 
 # Files to write the tf example to.
 training_writer = tf.python_io.TFRecordWriter("data/training.tfrecord")
@@ -51,7 +51,8 @@ for filename in filenames:
             i += 1  # Track the number of lines we have been through.
             if i % 10000 == 0:
                 print('Starting line number {i}'.format(i=str(i)))
-
+                break
+    break
 validation_writer.close()
 testing_writer.close()
 training_writer.close()
