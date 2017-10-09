@@ -3,7 +3,7 @@ tf.logging.set_verbosity(tf.logging.INFO)
 import os
 import json
 from input_functions import input_fn, serving_input_receiver_fn
-from model import cnnlstm
+from trans_model import transformer
 import argparse
 import io
 
@@ -21,18 +21,20 @@ reve_vocab = get_vocab('../Data/data/vocab/words_vocab_reve.json')
 batch = 18
 # the embedding size to use and the (keep) drop out percentage
 model_params = {'char_vocab_size': len(char_vocab),
-                'char_embedding_size': 25,
+                'word_vocab_size': len(word_vocab),
+                'char_embedding_size': 15,
                 'dropout': 0.8,
                 'hidden_size': 512,
-                'learning_rate': 0.00001,
+                'learning_rate': 0.001,
                 'decay_steps': 100000,
-                'network_depth': 2,
-                'kernels': [2, 3, 4, 5],
-                'kernel_features': [200, 200, 200, 200],
-                'word_vocab_size': len(word_vocab),
-                'word_embedding_size': 300,
-                'start_token': word_vocab['|GOO|'],
-                'end_token': word_vocab['|EOS|']}
+                'kernels': [2, 3, 4, 5, 6],
+                'kernel_features': [50, 100, 150, 200, 200],
+                'ultimate_sequ_len': 100,
+                'num_blocks': 2,
+                'attention_heads': 8,
+                'eos': word_vocab['|EOS|'],
+                'go_char': word_vocab['|GOO|'],
+                'words_vocab_filename': '../Data/data/vocab/word_list.txt'}
 # The number of times to train the model on the entire dataset
 epochs = 10
 # The part of the dataset that will be skipped to be used by the training
@@ -56,7 +58,7 @@ def train():
                                         save_summary_steps=1000)
     # Create the estimator, the actual RNN model, with the defined directory
     # for storing files, the parameters, and the config.
-    estimator = tf.estimator.Estimator(model_fn=cnnlstm,
+    estimator = tf.estimator.Estimator(model_fn=transformer,
                                        model_dir="output/",
                                        params=model_params,
                                        config=config)

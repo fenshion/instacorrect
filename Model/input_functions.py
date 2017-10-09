@@ -119,8 +119,9 @@ def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
     # Let's now make it a bit more easy to understand this dataset by mapping
     # each feature.
     dataset = dataset.map(lambda a, b, c, d, e:
-                          ({"input": a, "input_length": b},
-                           {"output": c, "output_chars": d, "output_length": e}
+                          ({"sequence": a, "sequence_length": b},
+                           {"sequence": c, "sequence_chars": d,
+                            "sequence_length": e}
                            ))
     # Create the iterator to enumerate the elements of the dataset.
     iterator = dataset.make_one_shot_iterator()
