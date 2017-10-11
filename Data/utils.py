@@ -18,10 +18,12 @@ def encode_line(line, vocab):
     return sequence, sequence_length
 
 
-def encode_line_charwise(line, vocab):
+def encode_line_charwise(line, vocab, go=False):
     """Given a string will encode it into the right tf.example format"""
     # Encode the string into their vocab representation
     splited = word_tokenize(line)
+    if go:
+        splited = ['|GOO|'] + splited
     sequence_length = len(splited)
     max_word_length = max([len(word)+2 for word in splited])
     # Should have a one array of int.
@@ -61,7 +63,8 @@ def _int64_feature(value):
 def create_example(inputs, outputs, word_vocab, char_vocab):
     """Given a string and a label (and a vocab dict), returns a tf.Example"""
     inp_seq, inp_sl, inp_maxword = encode_line_charwise(inputs, char_vocab)
-    out_seq, out_sl1, out_maxword = encode_line_charwise(outputs, char_vocab)
+    out_seq, out_sl1, out_maxword = encode_line_charwise(outputs, char_vocab,
+                                                         go=True)
     out_seq_w, out_sl2 = encode_line_wordwise_transformer(outputs, word_vocab)
     example = tf.train.Example(features=tf.train.Features(feature={
         'input_sequence': _int64_feature(inp_seq),

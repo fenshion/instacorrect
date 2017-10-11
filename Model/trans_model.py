@@ -18,6 +18,7 @@ def transformer(features, labels, mode, params):
     """
     with tf.variable_scope('VariableDefinition'):
         input_shape = tf.shape(features['sequence'])
+        bsize = params['batch_size']
         batch_size = input_shape[0]  # the current batch size
         timesteps = input_shape[1]  # The number of unrollings for the encoder
         c_embed_s = params['char_embedding_size']  # The embedding size of char
@@ -44,10 +45,10 @@ def transformer(features, labels, mode, params):
                                                  features['sequence'])
         # Apply a character convolution on the characters
         conv_inputs = char_convolution(embedded_inputs, kernels,
-                                       kernel_features, c_embed_s, reuse=None)
+                                       kernel_features, c_embed_s, hidden_size,
+                                       reuse=None)
         # Map the result to the 512 dimension
         conv_outputs = tf.layers.dense(conv_inputs, 512)
-        print('conv_outputs', conv_outputs)
     with tf.variable_scope('Encoder'):
         # Positional Embeddings
         position_emb = encode_positions(position_embed_table, conv_outputs)
@@ -70,21 +71,21 @@ def transformer(features, labels, mode, params):
 
     with tf.variable_scope('Decoder'):
         # Decoder
-        # Training time so the decoder inputs are available, they wont be
-        # available at inference time.
-        # Should replace the first character of every sequence with the
-        # go character. output is of the shape [batc, seqlen, wordlen]
+        # Seperate for training and inference
         if mode == tf.estimator.ModeKeys.PREDICT:
-            go_char = tf.fill([batch_size, 1, 10], params['go_char'])
+            # We are at inference, we need to create a synthetic GO CHAR
+            go_char = tf.sparse_to_dense(sparse_indices=[params['go_char_i']],
+                                         sparse_values=[params['go_char_v']],
+                                         output_shape=[1, 1, 10])
+            # We need to tile it to the correct_batch_size
+            go_char = tf.tile(go_char, [batch_size, 1, 1])
             # Embed the characters
             decoder_inputs = tf.nn.embedding_lookup(embeddings_c, go_char)
             # Apply a character convolution on the characters
             with tf.variable_scope(convolution, reuse=True):
                 decoder_inputs = char_convolution(decoder_inputs, kernels,
                                                   kernel_features, c_embed_s,
-                                                  reuse=True)
-            # Map the result to the 512 dimension
-            decoder_inputs = tf.layers.dense(decoder_inputs, 512)
+                                                  hidden_size, reuse=True)
             # Get the positional embeddings
             output_pos_embbed = encode_positions(position_embed_table,
                                                  decoder_inputs)
@@ -93,60 +94,85 @@ def transformer(features, labels, mode, params):
             # Table to get every words characters at decode time
             table = make_table(params['words_vocab_filename'])
 
-            def greedy_infer_step(decoder_inputs, i):
+            def greedy_infer_step(i, decoder_inputs):
                 """ Perfom a one step greedy inference step """
+                decoder_inputs = decoder_inputs[:, -1, :]
+                decoder_inputs = tf.expand_dims(decoder_inputs, axis=1)
                 decoder_output = decode_step(encoder_outputs, decoder_inputs,
-                                             num_blocks, reuse=True)
+                                             num_blocks)
+                print('decoder_inputs', decoder_inputs)
+                print('decoder_output', decoder_output)
                 logits = tf.layers.dense(decoder_output, vocab_size_word)
-                preds = tf.cast(tf.arg_max(logits, dimension=-1), tf.int32)
+                print('logits', logits)
+                preds = tf.cast(tf.argmax(logits, axis=-1), tf.int32)
+                preds = tf.squeeze(preds)
+                print('preds', preds)
                 # Check if EOS
-                tf.cond(is_eos(preds, eos, batch_size), tf.add(i, 10000),
-                        tf.add(i, 1))
+                i = tf.cond(is_eos(preds, eos, batch_size),
+                            lambda: tf.add(i, 10000),
+                            lambda: tf.add(i, 1))
                 # Check in the preds if there all the sentences are EOS.
                 # If yes assign +inf to i else increment i by one.
                 # Take the preds and find their char rep in the hashtable
                 # Convert the sparse tensor from the hashtable to a dense repr.
                 # then prepare_encoder_inputs with the dense tensor
                 # This is the new deocder_inputs
-                values = table.lookup(preds)
-                # We now have an array of ['1,44,54','4,66,5']
+                values = table.lookup(tf.cast(preds, tf.int64))
+                print('values', values)
+                # We now have an array of
+                # ['1,44,54','4,66,5']
+                # ['1,44,54','4,66,5']
                 splited = tf.string_split(values, ',')
+                print('splited', splited)
                 # Sparse tensor with the splited strings as values
                 splited_int = tf.string_to_number(splited.values,
                                                   out_type=tf.int32)
+                print('splited_int', splited_int)
                 # Make the values to int32 and convert to dense
                 preds_chars = tf.sparse_to_dense(splited.indices,
                                                  splited.dense_shape,
                                                  splited_int)
+                print('preds_chars', preds_chars)
                 # Send the characters to embeddings.
                 preds_embed = tf.nn.embedding_lookup(embeddings_c, preds_chars)
+                print('preds_embed', preds_embed)
                 # Augment the second dimension (sequence of length 1)
+                # [batch, seq_len, max_word, embed]
                 preds_embed = tf.expand_dims(preds_embed, 1)
+                print('preds_embed', preds_embed)
                 # Send for convolution
                 with tf.variable_scope(convolution, reuse=True):
                     preds_convo = char_convolution(preds_embed, kernels,
                                                    kernel_features, c_embed_s,
-                                                   reuse=True)
+                                                   hidden_size, reuse=True)
                 # Delete the second dimension
+                print('preds_convo', preds_convo)
                 preds_convo = tf.squeeze(preds_convo, axis=1)
+                print('preds_convo', preds_convo)
                 # Position Embeddings
-                input_one = tf.tile(tf.expand_dims(i, 0), [batch_size, 1])
+                input_one = tf.tile(tf.expand_dims(i, 0), [batch_size])
+                print('input_one', input_one)
+                input_one = tf.expand_dims(input_one, 1)
+                print('input_one', input_one)
                 position_emb = tf.nn.embedding_lookup(position_embed_table,
                                                       input_one)
+                print('position_emb', position_emb)
                 position_emb = position_emb * math.sqrt(hidden_size)
                 preds_output = preds_convo + position_emb
+                print('preds_output', preds_output)
                 # Concat this step's results with the previous steps results
                 decoder_output = tf.concat([decoder_output, preds_output],
                                            axis=1)
-                return decoder_output, i
+                print('decoder_output', decoder_output)
+                return i, decoder_output
 
-            def condition(decoder_inputs, i):
-                tf.less(i, timesteps*2)
-            i = tf.constant(0)
-            tshape = [tf.TensorShape([batch_size, None, None]), i.get_shape()]
-            decoder_outputs = tf.while_loop(condition, greedy_infer_step,
-                                            [decoder_inputs, i],
-                                            shape_invesriants=tshape)
+            def condition(i, decoder_inputs):
+                return tf.less(i, timesteps*2)
+            i = tf.constant(0, dtype=tf.int32)
+            tshape = [i.get_shape(), tf.TensorShape([None, None, hidden_size])]
+            i, decoder_outputs = tf.while_loop(condition, greedy_infer_step,
+                                               [i, decoder_inputs],
+                                               shape_invariants=tshape)
         else:
             # Training time
             # Embed the characters
@@ -156,9 +182,7 @@ def transformer(features, labels, mode, params):
             with tf.variable_scope(convolution, reuse=True):
                 decoder_inputs = char_convolution(decoder_inputs, kernels,
                                                   kernel_features, c_embed_s,
-                                                  reuse=True)
-            # Map the result to the 512 dimension
-            decoder_inputs = tf.layers.dense(decoder_inputs, hidden_size)
+                                                  hidden_size, reuse=True)
             # Get the positional embeddings
             output_position_emb = encode_positions(position_embed_table,
                                                    decoder_inputs)
@@ -171,48 +195,29 @@ def transformer(features, labels, mode, params):
 
     # Final layer projection
     with tf.variable_scope('final_layer'):
-        # Final layer weights + biases
-        final_x = tf.get_variable('final_x', [hidden_size, ])
-        final_b = tf.get_variable('final_b', [vocab_size_word])
         # Project the decoder output to a word_vocab_size dimension
-        # logits = tf.layers.dense(decoder_outputs, params['word_vocab_size'])
+        logits = tf.layers.dense(decoder_outputs, params['word_vocab_size'])
         # Take the arg max for each, ie, the word id.
-        if mode == tf.estimator.ModeKeys.TRAIN:
-            decoder_o = labels['sequence']
-            print(decoder_o)
-            print(decoder_outputs)
-            # d_reshape = tf.reshape(decoder_outputs, [batch_size, num]) 
-            loss = tf.nn.sampled_softmax_loss(weights=final_x,
-                                              biases=final_b,
-                                              labels=decoder_o,
-                                              inputs=decoder_outputs,
-                                              num_sampled=1000,
-                                              num_classes=vocab_size_word,
-                                              partition_strategy="div")
-        else:
-            logit = tf.matmul(decoder_outputs, tf.transpose(final_x))
-            logit = tf.nn.bias_add(logit, final_b)
-            preds = tf.cast(tf.argmax(logit, axis=2), tf.int32)
-            if mode == tf.estimator.ModeKeys.PREDICT:
-                # Return a dict with the sample word ids.
-                preds = {"sequence": preds}
-                export = {
-                    'prediction': tf.estimator.export.PredictOutput(preds)
-                }
-                return tf.estimator.EstimatorSpec(mode=mode, predictions=preds,
-                                                  export_outputs=export)
-            deco = labels['sequence']
-            loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=deco,
-                                                                  logits=logit)
-
+        preds = tf.cast(tf.argmax(logits, axis=2), tf.int32)
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            # Return a dict with the sample word ids.
+            preds = {"sequence": preds}
+            export = {
+                'prediction': tf.estimator.export.PredictOutput(preds)
+            }
+            return tf.estimator.EstimatorSpec(mode=mode, predictions=preds,
+                                              export_outputs=export)
+        deco = labels['sequence']
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=deco,
+                                                              logits=logits)
         # Create a mask for padding characters
         target_w = tf.sequence_mask(labels['sequence_length'],
-                                    dtype=logit.dtype)
+                                    dtype=tf.float32)
         batch_size_32 = tf.cast(batch_size, tf.float32)
-        timesteps_32 = tf.cast(timesteps, tf.float32)
+        timesteps_32 = tf.cast(tf.reduce_sum(timesteps), tf.float32)
         # Apply the mask and normalize the loss for the batch size. Could also
         # Normalize the loss for the sequence length
-        loss = (tf.reduce_sum(loss * target_w) / (batch_size_32+timesteps_32))
+        loss = (tf.reduce_sum(loss * target_w) / (batch_size_32*timesteps_32))
     # Train
     with tf.variable_scope('train'):
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -231,7 +236,7 @@ def transformer(features, labels, mode, params):
                                               train_op=train_op)
     # Evaluation
     with tf.variable_scope('eval'):
-        eval_metric_ops = {"accuracy": tf.metrics.accuracy(labels=decoder_o,
+        eval_metric_ops = {"accuracy": tf.metrics.accuracy(labels=deco,
                                                            predictions=preds,
                                                            weights=target_w)}
         return tf.estimator.EstimatorSpec(mode=mode, loss=loss,

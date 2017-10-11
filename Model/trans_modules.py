@@ -20,7 +20,7 @@ def conv2d(input_, output_dim, k_h, k_w, name="conv2d", reuse=None):
 
 
 def char_convolution(inputs, kernels, kernel_features, c_embed_s,
-                     scope="char_convol", reuse=None):
+                     hidden_size, scope="char_convol", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         # Given an input of shape [batch, s_length, w_length, embed_dim]
         # performs a 1D convolutions with multiple kernel sizes.
@@ -47,6 +47,7 @@ def char_convolution(inputs, kernels, kernel_features, c_embed_s,
         # Reshape it to match sequence length
         cnn_output = tf.reshape(cnn_output, [batch_si, s_length,
                                 sum(kernel_features)])
+        cnn_output = tf.layers.dense(cnn_output, hidden_size)
         return cnn_output
 
 
@@ -176,7 +177,7 @@ def is_eos(inputs, eos, batch_size):
     equal = tf.equal(inputs, eos)
     axis_reduc = tf.reduce_sum(tf.cast(equal, tf.float32), axis=1)
     is_eos = tf.reduce_sum(axis_reduc)
-    return tf.equal(is_eos, batch_size)
+    return tf.equal(is_eos, tf.cast(batch_size, tf.float32))
 
 
 def decode_step(encoder_outputs, decoder_inputs, num_blocks, reuse=None):
@@ -185,16 +186,16 @@ def decode_step(encoder_outputs, decoder_inputs, num_blocks, reuse=None):
     for i in range(num_blocks):
         with tf.variable_scope('num_blocks_{}'.format(i), reuse=reuse):
             # Multihead attention (self attention)
-            decoder_outputs = multihead_attention(queries=encoder_outputs,
-                                                  keys=decoder_inputs,
+            decoder_outputs = multihead_attention(queries=decoder_inputs,
+                                                  keys=encoder_outputs,
                                                   num_units=512,
                                                   num_heads=8,
                                                   dropout=0.8,
                                                   causality=True,
                                                   scope="self_attention",
                                                   reuse=reuse)
-            decoder_outputs = multihead_attention(queries=decoder_outputs,
-                                                  keys=decoder_inputs,
+            decoder_outputs = multihead_attention(queries=decoder_inputs,
+                                                  keys=decoder_outputs,
                                                   num_units=512,
                                                   num_heads=8,
                                                   dropout=0.8,
@@ -220,5 +221,4 @@ def encode_positions(embeddings, inputs):
 def make_table(vocabulary_file):
     table = tf.contrib.lookup.index_to_string_table_from_file(vocabulary_file,
                                                               default_value="")
-    tf.tables_initializer().run()
     return table

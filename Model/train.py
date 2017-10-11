@@ -24,6 +24,7 @@ model_params = {'char_vocab_size': len(char_vocab),
                 'word_vocab_size': len(word_vocab),
                 'char_embedding_size': 15,
                 'dropout': 0.8,
+                'batch_size': batch,
                 'hidden_size': 512,
                 'learning_rate': 0.001,
                 'decay_steps': 100000,
@@ -33,17 +34,16 @@ model_params = {'char_vocab_size': len(char_vocab),
                 'num_blocks': 2,
                 'attention_heads': 8,
                 'eos': word_vocab['|EOS|'],
-                'go_char': word_vocab['|GOO|'],
+                'go_char_v': [char_vocab[e] for e in u'{|GOO|}'],
+                'go_char_i': [[0, 0, i] for i in range(len(u'{|GOO|}'))],
                 'words_vocab_filename': '../Data/data/vocab/word_list.txt'}
 # The number of times to train the model on the entire dataset
-epochs = 10
+epochs = 100000
 # The part of the dataset that will be skipped to be used by the training
 # and testing dataset
 # Lambda function used in the experiment. Returns a dataset iterator
-data_train = lambda: input_fn("../Data/data/training.tfrecord", batch,
-                              epochs)
-data_valid = lambda: input_fn("../Data/data/validation.tfrecord", batch,
-                              epochs, batch*250)
+data_train = lambda: input_fn("../Data/data/training.tfrecord", batch, epochs)
+data_valid = lambda: input_fn("../Data/data/validation.tfrecord", batch, 1)
 
 # Set the TF_CONFIG environment to local to avoid bugs
 os.environ['TF_CONFIG'] = json.dumps({'environment': 'local'})
@@ -88,7 +88,7 @@ def inference(rng):
                                         save_summary_steps=1000)
     # Create the estimator, the actual RNN model, with the defined directory
     # for storing files, the parameters, and the config.
-    estimator = tf.estimator.Estimator(model_fn=cnnlstm,
+    estimator = tf.estimator.Estimator(model_fn=transformer,
                                        model_dir="output/",
                                        params=model_params,
                                        config=config)
@@ -112,7 +112,7 @@ def export():
                                         tf_random_seed=0,
                                         save_summary_steps=1000)
 
-    estimator = tf.estimator.Estimator(model_fn=cnnlstm,
+    estimator = tf.estimator.Estimator(model_fn=transformer,
                                        model_dir="output/",
                                        params=model_params,
                                        config=config)
@@ -127,14 +127,13 @@ def input_inspection():
     char_vocab = get_vocab('../Data/data/vocab/char_vocab_dict.json')
     reverse_word_vocab = get_vocab('../Data/data/vocab/words_vocab_reve.json')
 
-    features, labels = input_fn("../Data/data/training.tfrecord", 25, 1,
-                                take=1000)
+    features, labels = data_train()
+
     sess = tf.Session()
     features, labels = sess.run([features, labels])
-    print(features)
-    inputs = features['input']
-    output = labels['output']
-    output_chars = labels['output_chars']
+    inputs = features['sequence']
+    output = labels['sequence']
+    output_chars = labels['sequence_chars']
 
     pad_char = char_vocab['|PAD|']
     for i in range(inputs.shape[0]):
