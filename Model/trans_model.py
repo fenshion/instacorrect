@@ -18,7 +18,6 @@ def transformer(features, labels, mode, params):
     """
     with tf.variable_scope('VariableDefinition'):
         input_shape = tf.shape(features['sequence'])
-        bsize = params['batch_size']
         batch_size = input_shape[0]  # the current batch size
         timesteps = input_shape[1]  # The number of unrollings for the encoder
         c_embed_s = params['char_embedding_size']  # The embedding size of char
@@ -208,6 +207,7 @@ def transformer(features, labels, mode, params):
             return tf.estimator.EstimatorSpec(mode=mode, predictions=preds,
                                               export_outputs=export)
         deco = labels['sequence']
+        deco = tf.Print(deco, [preds[0, :]], message="preds")
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=deco,
                                                               logits=logits)
         # Create a mask for padding characters
