@@ -8,12 +8,14 @@ Created on Tue Sep 26 20:07:39 2017
 import numpy as np
 import tensorflow as tf
 
+initializer = tf.contrib.layers.xavier_initializer()
+
 
 def conv2d(input_, output_dim, k_h, k_w, name="conv2d", reuse=None):
     # cnn_inputs, kernel_feature_size, 1, kernel_size
     with tf.variable_scope(name, reuse=reuse):
         w = tf.get_variable('w', [k_h, k_w, input_.get_shape()[-1],
-                                  output_dim])
+                                  output_dim], initializer=initializer)
         b = tf.get_variable('b', [output_dim])
         result = tf.nn.conv2d(input_, w, strides=[1, 1, 1, 1], padding='VALID')
         return result + b
@@ -27,6 +29,8 @@ def char_convolution(inputs, kernels, kernel_features, c_embed_s,
         batch_si = tf.shape(inputs)[0]
         s_length = tf.shape(inputs)[1]
         w_length = tf.shape(inputs)[2]
+        w_length = tf.Print(w_length, [batch_si, s_length, w_length], message="values")
+        # Reshape to have every word batchwise
         cnn_inputs = tf.reshape(inputs, [batch_si*s_length, w_length,
                                          c_embed_s])
         # Expand the second dimension for convolution purposes
@@ -41,14 +45,14 @@ def char_convolution(inputs, kernels, kernel_features, c_embed_s,
             # Take the max pooling
             pool = tf.reduce_max(tf.tanh(conv), 2, keep_dims=True)
             # Append the squeezed version
-            layers.append(tf.squeeze(pool, [1, 2]))
+            layers.append(tf.squeeze(pool))
         # Concat the results along the second axis to give words embeddings
         cnn_output = tf.concat(layers, 1)
         # Reshape it to match sequence length
         cnn_output = tf.reshape(cnn_output, [batch_si, s_length,
                                 sum(kernel_features)])
         cnn_output = tf.layers.dense(cnn_output, hidden_size)
-        return cnn_output
+        return cnn_output * (hidden_size ** 0.5)
 
 
 def positional_encoding_table(max_len, num_units, scope="pos_embedding",
@@ -74,7 +78,6 @@ def embedding(inputs, vocab_size, num_units, scope="embedding", reuse=None):
     with tf.variable_scope(scope, reuse=True):
         # Variable that holds the mapping between the ids
         # and their representation
-        initializer = tf.contrib.layers.xavier_initializer()
         lookup_table = tf.get_variable('lookup_table',
                                        dtype=tf.float32,
                                        shape=[vocab_size, num_units],
@@ -98,9 +101,18 @@ def multihead_attention(queries, keys, num_units=None, num_heads=8, dropout=0,
         # For every head
         for i in range(num_heads):
             # Project the queries, keys and values on projection_dim
-            Q = tf.layers.dense(queries, projection_dim)
-            K = tf.layers.dense(keys, projection_dim)
-            V = tf.layers.dense(keys, projection_dim)
+            Q = tf.layers.dense(queries, projection_dim,
+                                kernel_initializer=initializer,
+                                name="num_head_{i}_q".format(i=i),
+                                reuse=reuse)
+            K = tf.layers.dense(keys, projection_dim,
+                                kernel_initializer=initializer,
+                                name="num_head_{i}_k".format(i=i),
+                                reuse=reuse)
+            V = tf.layers.dense(keys, projection_dim,
+                                kernel_initializer=initializer,
+                                name="num_head_{i}_v".format(i=i),
+                                reuse=reuse)
             # Multiply the query with the keys to get the attention scores
             scores = tf.matmul(Q, tf.transpose(K, [0, 2, 1]))
             # Scale the result
@@ -138,7 +150,9 @@ def multihead_attention(queries, keys, num_units=None, num_heads=8, dropout=0,
         # Concat the intermediate results
         concat = tf.concat(intermediate_outputs, axis=2)
         # Apply a last linear projection
-        linear = tf.layers.dense(concat, num_units, activation=None)
+        linear = tf.layers.dense(concat, num_units, activation=None,
+                                 kernel_initializer=initializer,
+                                 name="linear")
         # Residual connection (Add)
         outputs = queries + linear
         # Normalize outputs (Norm)
@@ -154,12 +168,14 @@ def feed_forward(inputs, scope="multihead_attention", reuse=None):
     # with a relu activation function
     with tf.variable_scope(scope, reuse=reuse):
         params = {"inputs": inputs, "filters": 2048, "kernel_size": 1,
-                  "activation": tf.nn.relu, "use_bias": True}
+                  "activation": tf.nn.relu, "use_bias": True,
+                  "kernel_initializer": initializer}
         outputs = tf.layers.conv1d(**params)
         # And a second layer element wise dense layer that project the output
         # to the num_units of 512
         params = {"inputs": outputs, "filters": 512, "kernel_size": 1,
-                  "activation": None, "use_bias": True}
+                  "activation": None, "use_bias": True,
+                  "kernel_initializer": initializer}
         outputs = tf.layers.conv1d(**params)
         # Residual connection (Add)
         outputs += inputs
@@ -175,7 +191,7 @@ def label_smoothing(inputs, epsilon=0.1):
 
 def is_eos(inputs, eos, batch_size):
     equal = tf.equal(inputs, eos)
-    axis_reduc = tf.reduce_sum(tf.cast(equal, tf.float32), axis=1)
+    axis_reduc = tf.reduce_sum(tf.cast(equal, tf.float32), axis=0)
     is_eos = tf.reduce_sum(axis_reduc)
     return tf.equal(is_eos, tf.cast(batch_size, tf.float32))
 
@@ -222,3 +238,11 @@ def make_table(vocabulary_file):
     table = tf.contrib.lookup.index_to_string_table_from_file(vocabulary_file,
                                                               default_value="")
     return table
+
+
+def make_logits(inputs, out_dim, scope="final_layer", reuse=None):
+    with tf.variable_scope(scope, reuse=reuse):
+        logits = tf.layers.dense(inputs, out_dim,
+                                 kernel_initializer=initializer,
+                                 name="projection_layer")
+    return logits

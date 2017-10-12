@@ -6,6 +6,9 @@ from input_functions import input_fn, serving_input_receiver_fn
 from trans_model import transformer
 import argparse
 import io
+from tensorflow.python import debug as tf_debug
+# hooks = [tf_debug.LocalCLIDebugHook()]
+hooks = []
 
 
 def get_vocab(filename):
@@ -23,10 +26,10 @@ batch = 18
 model_params = {'char_vocab_size': len(char_vocab),
                 'word_vocab_size': len(word_vocab),
                 'char_embedding_size': 15,
-                'dropout': 0.8,
+                'dropout': 0.2,
                 'batch_size': batch,
                 'hidden_size': 512,
-                'learning_rate': 0.1,
+                'learning_rate': 0.0001,
                 'decay_steps': 100000,
                 'kernels': [2, 3, 4, 5, 6],
                 'kernel_features': [50, 100, 150, 200, 200],
@@ -36,7 +39,7 @@ model_params = {'char_vocab_size': len(char_vocab),
                 'eos': word_vocab['|EOS|'],
                 'go_char_v': [char_vocab[e] for e in u'{|GOO|}'],
                 'go_char_i': [[0, 0, i] for i in range(len(u'{|GOO|}'))],
-                'words_vocab_filename': '../Data/data/vocab/word_list.txt'}
+                'words_vocab_filename': '../Data/data/vocab/words_list.txt'}
 # The number of times to train the model on the entire dataset
 epochs = 100000
 # The part of the dataset that will be skipped to be used by the training
@@ -72,7 +75,9 @@ def train():
                                              eval_input_fn=data_valid,
                                              eval_steps=None,
                                              local_eval_frequency=1,
-                                             min_eval_frequency=1)
+                                             min_eval_frequency=1,
+                                             train_monitors=hooks,
+                                             eval_hooks=hooks)
     experiment.train_and_evaluate()
 
 
@@ -92,7 +97,7 @@ def inference(rng):
                                        model_dir="output/",
                                        params=model_params,
                                        config=config)
-    result = estimator.predict(data_test)
+    result = estimator.predict(data_valid)
     print(result)
     i = 0
     while i < rng:
@@ -127,10 +132,10 @@ def input_inspection():
     char_vocab = get_vocab('../Data/data/vocab/char_vocab_dict.json')
     reverse_word_vocab = get_vocab('../Data/data/vocab/words_vocab_reve.json')
 
-    features, labels = data_train()
+    f, l = data_train()
 
     sess = tf.Session()
-    features, labels = sess.run([features, labels])
+    features, labels = sess.run([f, l])
     inputs = features['sequence']
     output = labels['sequence']
     output_chars = labels['sequence_chars']
