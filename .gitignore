@@ -13,6 +13,10 @@ eval/
 **/eval/
 *.pbtxt
 **.json
+result.txt
+dataset.txt
+apply_bpe.txt
+learn_bpe.txt
 words_list.txt
 # Byte-compiled / optimized / DLL files
 __pycache__/
