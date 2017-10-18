@@ -13,12 +13,12 @@ hooks = []
 
 def get_vocab(filename):
     with io.open(filename, 'r', encoding='utf8') as fin:
-        vocab = json.loads(fin.readline())
+        vocab = json.load(fin)
     return vocab
 
 char_vocab = get_vocab('../Data/data/vocab/char_vocab_dict.json')
-word_vocab = get_vocab('../Data/data/vocab/words_vocab_dict.json')
-reve_vocab = get_vocab('../Data/data/vocab/words_vocab_reve.json')
+word_vocab = get_vocab('../Data/data/bpe/apply_bpe.txt.json')
+reve_vocab = get_vocab('../Data/data/bpe/apply_bpe.txt_reve.json')
 # Parameters given to the estimator. Mainly the size of the vocabulary
 # The batch size to use for the train/valid/test set
 batch = 18
@@ -26,20 +26,18 @@ batch = 18
 model_params = {'char_vocab_size': len(char_vocab),
                 'word_vocab_size': len(word_vocab),
                 'char_embedding_size': 15,
+                'word_embedding_size': 125,
                 'dropout': 0.2,
-                'batch_size': batch,
                 'hidden_size': 512,
-                'learning_rate': 0.0001,
+                'learning_rate': 0.001,
                 'decay_steps': 100000,
                 'kernels': [2, 3, 4, 5, 6],
                 'kernel_features': [50, 100, 150, 200, 200],
                 'ultimate_sequ_len': 100,
-                'num_blocks': 2,
+                'num_blocks': 6,
                 'attention_heads': 8,
-                'eos': word_vocab['|EOS|'],
-                'go_char_v': [char_vocab[e] for e in u'{|GOO|}'],
-                'go_char_i': [[0, 0, i] for i in range(len(u'{|GOO|}'))],
-                'words_vocab_filename': '../Data/data/vocab/words_list.txt'}
+                'go_id': word_vocab['GOO'],
+                'eos_id': word_vocab['EOS']}
 # The number of times to train the model on the entire dataset
 epochs = 100000
 # The part of the dataset that will be skipped to be used by the training
@@ -84,8 +82,8 @@ def train():
 def inference(rng):
     """Perform an inference on the latest checkpoint available"""
     # Lambda function used in the experiment. Returns a dataset iterator
-    data_test = lambda: input_fn("../Data/data/validation.tfrecord", batch,
-                                 epochs)
+    data_test = lambda: input_fn("../Data/data/validation.tfrecord", 5, 1,
+                                 take=10)
     # Create a run config
     config = tf.contrib.learn.RunConfig(save_checkpoints_secs=60*60,
                                         log_device_placement=True,
@@ -97,15 +95,15 @@ def inference(rng):
                                        model_dir="output/",
                                        params=model_params,
                                        config=config)
-    result = estimator.predict(data_valid)
+    result = estimator.predict(data_test)
     print(result)
-    i = 0
-    while i < rng:
-        sequence = next(result)
+    sequence = next(result)
+    print(sequence)
+    while sequence:
         print(sequence)
         txt = " ".join([reve_vocab[str(wid)] for wid in sequence['sequence']])
         print(txt)
-        i += 1
+        sequence = next(result)
     return result
 
 
@@ -130,7 +128,7 @@ def input_inspection():
 
     reverse_char_vocab = get_vocab('../Data/data/vocab/char_vocab_reve.json')
     char_vocab = get_vocab('../Data/data/vocab/char_vocab_dict.json')
-    reverse_word_vocab = get_vocab('../Data/data/vocab/words_vocab_reve.json')
+    reverse_word_vocab = get_vocab('../Data/data/bpe/apply_bpe.txt_reve.json')
 
     f, l = data_train()
 
@@ -138,24 +136,12 @@ def input_inspection():
     features, labels = sess.run([f, l])
     inputs = features['sequence']
     output = labels['sequence']
-    output_chars = labels['sequence_chars']
+
 
     pad_char = char_vocab['|PAD|']
     for i in range(inputs.shape[0]):
         shape = inputs[i, :, :].shape
         sentence = inputs[i, :, :].tolist()
-        for x in range(shape[0]):  # Number of words
-            for y in range(shape[1]):  # Words length
-                if sentence[x][y] != pad_char:
-                    print(reverse_char_vocab.get(str(sentence[x][y]), '<UNK>'),
-                          end='')
-            print(' ', end='')
-        print('END')
-        print('****')
-
-    for i in range(output_chars.shape[0]):
-        shape = output_chars[i, :, :].shape
-        sentence = output_chars[i, :, :].tolist()
         for x in range(shape[0]):  # Number of words
             for y in range(shape[1]):  # Words length
                 if sentence[x][y] != pad_char:

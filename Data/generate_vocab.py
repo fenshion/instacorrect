@@ -8,14 +8,12 @@ To start with, all the strings will be splited according to the space char.
 import io
 import json
 import collections
-from nltk.tokenize import word_tokenize
 
 # First define the variables to hold the vocabularies. We use
 # collections.Counter to keep track of the word occurences.
 # We can then take the most X counter words, add a word with counter[word] += 1
 # take the 10 most counted items with: Counter.most_common(10)
 character_vocab = collections.Counter()
-word_vocab = collections.Counter()
 
 # Iterate over the dataset and add each word and character to their respective
 # dataset.
@@ -26,31 +24,11 @@ for filename in filenames:
         for line in fin.readlines():
             line_counter += 1
             # Strip the line of new line characters \n
-            line = line.strip()
-            # Split the line according to the space char
-            words = word_tokenize(line)
-            # For every word in the line, increment the counter
-            for word in words:
-                word_vocab[word.lower()] += 1
-            # Split the line according to characters and increment the counter
             for char in line:
                 character_vocab[char] += 1
             # If this is a the X line, print it.
             if line_counter % 10000 == 0:
                 print(str(line_counter))
-
-# We now have two counters. We need to convert these to regular dict that we
-# will export as JSON objects.
-# For the words we will only take the most common 500.000 words
-words_vocab_most = word_vocab.most_common(50000)  # Returns [(word, freq)]
-# Order the words by frequency.
-words_vocab_sort = [x[0] for x in words_vocab_most]
-words_vocab_sort.insert(0, '|UNK|')  # Will be 3
-words_vocab_sort.insert(0, '|EOS|')  # Will be 2
-words_vocab_sort.insert(0, '|GOO|')  # Will be 1
-words_vocab_sort.insert(0, '|PAD|')  # Will be 0
-words_vocab_dict = {word: i for i, word in enumerate(words_vocab_sort)}
-words_vocab_reve = {i: word for i, word in enumerate(words_vocab_sort)}
 
 # For characters we will take all of them.
 # Order the words by frequency. -> small numbers appear more often, max space
@@ -67,31 +45,10 @@ char_vocab_dict = {char: i for i, char in enumerate(char_vocab_sort)}
 char_vocab_reve = {i: char for i, char in enumerate(char_vocab_sort)}
 
 
-with io.open("data/vocab/words_vocab_dict.json", 'w+',
-             encoding='utf8') as fin:
-    fin.write(json.dumps(words_vocab_dict))
+filename = "data/vocab/char_vocab_reve.json"
+with open(filename, 'w', encoding="utf8") as f:
+    json.dump(char_vocab_reve, f, indent=2, ensure_ascii=False)
 
-with io.open("data/vocab/words_vocab_reve.json", 'w+',
-             encoding='utf8') as fin:
-    fin.write(json.dumps(words_vocab_reve))
-
-with io.open("data/vocab/char_vocab_dict.json", 'w+',
-             encoding='utf8') as fin:
-    fin.write(json.dumps(char_vocab_dict))
-
-with io.open("data/vocab/char_vocab_reve.json", 'w+',
-             encoding='utf8') as fin:
-    fin.write(json.dumps(char_vocab_reve))
-
-# For every word in the words_vocab should write it's encoded rep to file.
-with io.open("data/vocab/words_list.txt", 'w+',
-             encoding='utf8') as fin:
-    default_char = char_vocab_dict[' ']
-    for word in words_vocab_sort:
-        enc_word = [str(char_vocab_dict.get('{'))]
-        for char in word.strip():
-            enc_word.append(str(char_vocab_dict.get(char, default_char)))
-        enc_word.append(str(char_vocab_dict.get('}')))
-        enc_word_str = ",".join(enc_word)
-        enc_word_str += "\n"
-        fin.write(enc_word_str)
+filename = "data/vocab/char_vocab_dict.json"
+with open(filename, 'w', encoding="utf8") as f:
+    json.dump(char_vocab_dict, f, indent=2, ensure_ascii=False)

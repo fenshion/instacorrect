@@ -29,7 +29,6 @@ def char_convolution(inputs, kernels, kernel_features, c_embed_s,
         batch_si = tf.shape(inputs)[0]
         s_length = tf.shape(inputs)[1]
         w_length = tf.shape(inputs)[2]
-        w_length = tf.Print(w_length, [batch_si, s_length, w_length], message="values")
         # Reshape to have every word batchwise
         cnn_inputs = tf.reshape(inputs, [batch_si*s_length, w_length,
                                          c_embed_s])
@@ -222,13 +221,17 @@ def decode_step(encoder_outputs, decoder_inputs, num_blocks, reuse=None):
     return decoder_outputs
 
 
-def encode_positions(embeddings, inputs):
+def encode_positions(embeddings, inputs, inference=False, i=0):
     input_shape = tf.shape(inputs)
-    timesteps = input_shape[1]
-    batch_size = input_shape[0]
     hidden_size = tf.cast(input_shape[-1], dtype=tf.float32)
-    input_one = tf.tile(tf.expand_dims(tf.range(timesteps), 0),
-                        [batch_size, 1])
+    batch_size = input_shape[0]
+    timesteps = input_shape[1]
+    if inference:
+        # At inference, should only make one positional embedding
+        input_one = tf.tile(tf.reshape(i, [1, 1]), [batch_size, 1])
+    else:
+        input_one = tf.tile(tf.expand_dims(tf.range(timesteps), 0),
+                            [batch_size, 1])
     position_emb = tf.nn.embedding_lookup(embeddings, input_one)
     position_emb = position_emb * tf.sqrt(hidden_size)
     return position_emb
@@ -238,6 +241,13 @@ def make_table(vocabulary_file):
     table = tf.contrib.lookup.index_to_string_table_from_file(vocabulary_file,
                                                               default_value="")
     return table
+
+
+def project_embedding(inputs, hidden_size, reuse=False):
+    return tf.layers.dense(inputs, hidden_size,
+                           kernel_initializer=initializer,
+                           name="project_embedding",
+                           reuse=reuse)
 
 
 def make_logits(inputs, out_dim, scope="final_layer", reuse=None):

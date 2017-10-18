@@ -27,13 +27,19 @@ def main():
         sorted_words = [words[ii] for ii in sorted_idx[::-1]]
 
         worddict = OrderedDict()
-        worddict['eos'] = 0
-        worddict['UNK'] = 1
+        worddict['PAD'] = 0
+        worddict['EOS'] = 1
+        worddict['UNK'] = 2
+        worddict['GOO'] = 3
         for ii, ww in enumerate(sorted_words):
-            worddict[ww] = ii+2
+            worddict[ww] = ii+4
+        reverse_dict = {v: k for k, v in worddict.items()}
 
         with open('%s.json' % filename, 'w', encoding="utf8") as f:
             json.dump(worddict, f, indent=2, ensure_ascii=False)
+
+        with open('%s_reve.json' % filename, 'w', encoding="utf8") as f:
+            json.dump(reverse_dict, f, indent=2, ensure_ascii=False)
 
         print('Done')
 
