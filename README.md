@@ -8,53 +8,53 @@ End-to-end implementation of a **deep learning** (french) spell checker: www.ins
 
 
 ## Introduction
-The ultimate goal of the project is to have a model that can effectively correct any french sentence for spell and grammatical errors. To this end, this repository combines the architecture from [*Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*](https://arxiv.org/abs/1604.04677) and [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) to create a **character-based self-attention sequence-to-sequence model**. 
+The ultimate goal of the project is to have a model that can effectively correct any french sentence for spell and grammatical errors. To this end, this repository combines the architecture from [*Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*](https://arxiv.org/abs/1604.04677) and [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) to create a **character-based self-attention sequence-to-sequence model**.
 
 ## Background
 Error correction can be seen as translation task, where to goal is to translate a sentence with grammatical and orthographic errors into correct sentence (Schmaltz et al., 2016).
 
 Recent work in statistical machine translation (SMT) that achieved state of the art results made use of sequence-to-sequence models. These models use a recurrent neural network encoder-decoder architecture, it encodes the input sentence into a number of state vectors which are then read by the decoder to produce the output in the targeted language. Most architectures use a recurrent neural network (RNN) for the encoder, and a second RNN, coupled with an attention mechanism for the decoder (Luong et al., 2015). While powerful, this architecture suffers from two drawbacks: first it is hard to train, as each timestep depends on the completion of the previous input in the RNN. Second it is hard for an LSTM network cell to carry information from the beginning of a sentence until the end of sentence (Vaswani et al., 2017).
 
-Recently, Vaswani et al. released a new sequence-to-sequence model that did not use a RNN but instead used a self-attention mechanism. Instead of being analyzed sequentially, each input is compared against its peers to produce a deep representation of the inputs. As there is no sequentiality, the training can be easily parallelized. 
-Traditional translation models, uses word embeddings to represent words. It is not possible for an orthographic corrector to rely on a fixed vocabulary. Schmaltz and Kim used a convolutional network to dynamically embed words using characters only (Kim et al., 2015). 
+Recently, Vaswani et al. released a new sequence-to-sequence model that did not use a RNN but instead used a self-attention mechanism. Instead of being analyzed sequentially, each input is compared against its peers to produce a deep representation of the inputs. As there is no sequentiality, the training can be easily parallelized.
+Traditional translation models, uses word embeddings to represent words. It is not possible for an orthographic corrector to rely on a fixed vocabulary. Schmaltz and Kim used a convolutional network to dynamically embed words using characters only (Kim et al., 2015).
 
 This work, proposes to apply self-attention network to grammatical error corrections. As Vaswani did in their work, we will use byte-pair-encoding to encode the target output (Senrich et al. 2015). This way the model can cope with out-of-vocabulary words in the encoder and the decoder.
 
 
 ## Data Gathering and Pre-Processing
-In *Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*, the authors use the Automated Evaluation of Scientific Writing (AESW) 2016 dataset. It is a collection of nearly 10,000 sicneitif journal articles with annotated with professional editors (Schmatlz et al., 2015). 
+In *Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*, the authors use the Automated Evaluation of Scientific Writing (AESW) 2016 dataset. It is a collection of nearly 10,000 sicneitif journal articles with annotated with professional editors (Schmatlz et al., 2015).
 
 Unfortunately, there exist no such dataset for French. The workaround is to generate artificial errors in a correct corpus, namely the french translations from the [*European Parliament Proceedings Parallel Corpus 1996-2011*](http://www.statmt.org/europarl/), and news articles from the [*News Crawl: articles from 2014*](http://www.statmt.org/wmt15/translation-task.html). The resulting dataset contains around 13,000,000 sentences.
 We can now generate artificial grammatical mistakes in this dataset.
 
-The generation of grammatical mistakes is performed using regular expressions. For example, one regular expression could look for words ending with *"er"* and replace them with *"é"*. Another could look for *"laquelle"* and replace it with *"lequel"*. 
+The generation of grammatical mistakes is performed using regular expressions. For example, one regular expression could look for words ending with *"er"* and replace them with *"é"*. Another could look for *"laquelle"* and replace it with *"lequel"*.
 
-Now that we have a set of erroneous sentences along with their correction, we can generate the vocabularies and the input files. As the input to the model is character based, we will go through the entire corpus and make a character vocabularry (of around 300 characters). For the output of the model, we will use byte-pair-encoding (Senrich et al., 2015) as in *Attention Is All You Need*. This method will create a fixed vocabulary (15,000 entries in our case) of the most frequent pattern in the corpus. This allows the model to break previously unseen words in multiple tokens, eliminating the problem of out-of-vocabulary errors. 
+Now that we have a set of erroneous sentences along with their correction, we can generate the vocabularies and the input files. As the input to the model is character based, we will go through the entire corpus and make a character vocabularry (of around 300 characters). For the output of the model, we will use byte-pair-encoding (Senrich et al., 2015) as in *Attention Is All You Need*. This method will create a fixed vocabulary (15,000 entries in our case) of the most frequent pattern in the corpus. This allows the model to break previously unseen words in multiple tokens, eliminating the problem of out-of-vocabulary errors.
 
 
 ## Model
-The model is a mixture of Schmatlz et al., 2014 and Vaswani et al., 2017. It implements a **character-based self-attention sequence-to-sequence model**. 
+The model is a mixture of Schmatlz et al., 2014 and Vaswani et al., 2017. It implements a **character-based self-attention sequence-to-sequence model**.
 
 ### Character based convolution
-The input to the model looks like this a matrix `[batch_size, sentence_length, word_length]`. The first step is to use a embedding matrix to replace each character id with a fixed size vector. Our inputs now have the following shape: `[batch_size, sentence_length, word_length, char_embedding_size]`. This work uses a character embedding size of 15. 
+The input to the model looks like this a matrix `[batch_size, sentence_length, word_length]`. The first step is to use a embedding matrix to replace each character id with a fixed size vector. Our inputs now have the following shape: `[batch_size, sentence_length, word_length, char_embedding_size]`. This work uses a character embedding size of 15.
 
-The next step is to apply a convolution on each word in the inputs. Each word can be represented as a matrix of size: `[word_length, char_embedding_size]`, like a picture but with only one channel. To this end we will apply a 1D convolution with several filters sizes (2, 3, 4 and 5) with a varying number of kernels per filter size. After each convolution, a non-linearity is applied along with a max-over-time pooling. 
-At the end of the process, each word is represented by a fixed size vector. The model is now able to input previously unseen words. 
+The next step is to apply a convolution on each word in the inputs. Each word can be represented as a matrix of size: `[word_length, char_embedding_size]`, like a picture but with only one channel. To this end we will apply a 1D convolution with several filters sizes (2, 3, 4 and 5) with a varying number of kernels per filter size. After each convolution, a non-linearity is applied along with a max-over-time pooling.
+At the end of the process, each word is represented by a fixed size vector. The model is now able to input previously unseen words.
 
-<insert picture from Kim here>
-   
+![Image from Kim](https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/kim.PNG)
+
 ### Self-Attention
-Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). Look at the following illustration from the Google Research Blog. 
+Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). Look at the following illustration from the Google Research Blog.
 
-<insert picture from Google Research>
-   
+![Image from Google Research](https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/transformer.gif)
+
 Besides self-attention, the architecture has many other elements:
 - Positional encoding: each input and output is added (yes addition) to a positional vector that is dependent on its position on the sequence, to give a sense of position to the model.
 - Multi-head attention: each input is projected h times with different learned projections. According ot Vaswani et al. it allows the model to jointly attend to information from different representations subspaces at different positions.
-- Residual connection: at each node in the self-attention model, the input of this node is added to the output of the model. 
+- Residual connection: at each node in the self-attention model, the input of this node is added to the output of the model.
 - Layer Normalization: at each node the output of the model is normalized.
 
-<insert pictures from self-attention model>
+![Image from Vaswani](https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/attention.PNG)
 
 At training time, the model must predict the right output given the encoder's output and the decoder input for this timestep.
 This means that we can train the entire model at once, without waiting for the previous output to finish. Speeding up the training time. To prevent the model from looking "in the future", the future's decoder inputs are masked et training time.
