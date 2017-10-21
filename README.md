@@ -31,29 +31,39 @@ Now that we have a set of erroneous sentences along with their correction, we ca
 
 
 ## Model
-The model is a mixture of Schmatlz et al., 2014 and Vaswani et al., 2017. It implements a **character-based self-attention sequence-to-sequence model**.
+The model is a combination of the work of Schmatlz et al., 2014  and and Vaswani et al., 2017. It implements a **character-based self-attention sequence-to-sequence model**.
 
 #### Character based convolution
-The input to the model looks like this a matrix `[batch_size, sentence_length, word_length]`. The first step is to use a embedding matrix to replace each character id with a fixed size vector. Our inputs now have the following shape: `[batch_size, sentence_length, word_length, char_embedding_size]`. This work uses a character embedding size of 15.
+The input to the model is a matrix of `[batch_size, sentence_length, word_length]`. The first step is to use an embedding matrix to replace each character integer with a fixed size vector (the embedding) that is learned during the traning process. Our inputs now have the following shape: `[batch_size, sentence_length, word_length, char_embedding_size]`. 
 
-The next step is to apply a convolution on each word in the inputs. Each word can be represented as a matrix of size: `[word_length, char_embedding_size]`, like a picture but with only one channel. To this end we will apply a 1D convolution with several filters sizes (2, 3, 4 and 5) with a varying number of kernels per filter size. After each convolution, a non-linearity is applied along with a max-over-time pooling.
-At the end of the process, each word is represented by a fixed size vector. The model is now able to input previously unseen words.
+The next step is to apply a convolution on each word in the inputs. Each word can be represented as a matrix of size: `[word_length, char_embedding_size]`, more or less like black and white picture. Next, we apply a 1D convolution with several filters sizes (2, 3, 4 and 5) with 200 kernels. After each convolution, a non-linearity is applied along with a max-over-time pooling.
+At the end of the process, each word is represented by a fixed size vector. The model is now able to process previously unseen words.
 <p align="center"> 
   <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/kim.PNG" width="350" align="center">
 </p>
 
 #### Self-Attention
-Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). Look at the following illustration from the Google Research Blog.
+The next step is to give this word embedding to the encoder layer. Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). Look at the following illustration from the Google Research Blog.
 
 <p align="center"> 
   <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/transformer.gif" width="350" align="center">
 </p>
 
-Besides self-attention, the architecture has many other elements:
-- Positional encoding: each input and output is added (yes addition) to a positional vector that is dependent on its position on the sequence, to give a sense of position to the model.
-- Multi-head attention: each input is projected h times with different learned projections. According ot Vaswani et al. it allows the model to jointly attend to information from different representations subspaces at different positions.
-- Residual connection: at each node in the self-attention model, the input of this node is added to the output of the model.
-- Layer Normalization: at each node the output of the model is normalized.
+A self-attention model is divided into two parts: the encoder and the decoder.
+
+##### Encoder
+
+The encoder performs several stack of self-attention with its inputs as key, values and queries. Each word will be more or less represented as the weighted average of its projection against all of the other inputs in the sentence. At each stack, each word is augmented with the information surround it. The actual implementation is more complicated, but that is the basic idea behind it. 
+
+The decoder is performed in two steps. The first attention step is to compared the decoder's inputs against the ***encoder***'s outputs. The second attention step is to compare the result of the first step against the previously computed decoder's output.  
+
+Besides self-attention, the architecture implements many other elements:
+- __Positional encoding__: each input and output is added (yes addition) to a positional vector that is dependent on its position on the sequence, to give a sense of position to the model.
+- __Multi-head attention__: each input is projected h times with different learned projections. According ot Vaswani et al. it allows the model to jointly attend to information from different representations subspaces at different positions.
+- __Residual connection__: at each node in the self-attention model, the input of this node is added to the output of the model.
+- __Layer Normalization__: at each node the output of the model is normalized.
+- __Label Smoothing__: at each node the output of the model is normalized.
+- __Attention Dropout__: at each node the output of the model is normalized.
 
 <p align="center"> 
   <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/attention.PNG" width="332" align="center">
