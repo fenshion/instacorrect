@@ -6,44 +6,57 @@ End-to-end implementation of a **deep learning** (french) spell checker: www.ins
 * Model serving
 * Front-end interaction
 
+
 ## Introduction
-The ultimate goal of the project is to have a model that can effectively correct any french sentence for spell and grammatical mistakes. To this end, this repo implements the architecture from [*Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*](https://arxiv.org/abs/1604.04677)
-In this paper the authors create a Sequence-to-Sequence model with a CNN over characters encoder. We will do the same!
+The ultimate goal of the project is to have a model that can effectively correct any french sentence for spell and grammatical errors. To this end, this repository combines the architecture from [*Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*](https://arxiv.org/abs/1604.04677) and [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) to form a **character-based self-attention sequence-to-sequence model**. 
+
 
 ## Data Gathering and Pre-Processing
-The first step is to find a relevant dataset. In this case, there are no pre-made dataset available. We will have to make our own! For that, I downloaded all of the french translations from the [*European Parliament Proceedings Parallel Corpus 1996-2011*](http://www.statmt.org/europarl/), and news articles from the [*News Crawl: articles from 2014*](http://www.statmt.org/wmt15/translation-task.html). The resulting dataset contains around 13,000,000 sentences.
+In *Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*, the authors use the Automated Evaluation of Scientific Writing (AESW) 2016 dataset. It is a collection of nearly 10,000 sicneitif journal articles with annotated with professional editors (Schmatlz et al., 2015). 
 
-This gives us a set of correct sentences, at least in theory. We now have to come up with a set of erroneous sentences. We will generate them from correct one. In /Data/mistake.py, you will find a script that can automatically generate grammatical and spelling mistakes.
-For instnace, *Rien ne sert de courir, il faut partir à point* could lead to *Rien ne sers de courir, il faut partir a point*. This mistake generator is still basic but at least we have somehting to start with.
+Unfortunately, there exist no such dataset for French. The workaround is to generate artificial errors in a correct corpus, namely the french translations from the [*European Parliament Proceedings Parallel Corpus 1996-2011*](http://www.statmt.org/europarl/), and news articles from the [*News Crawl: articles from 2014*](http://www.statmt.org/wmt15/translation-task.html). The resulting dataset contains around 13,000,000 sentences.
+We can now generate artificial grammatical mistakes in this dataset.
 
-Before creating our dataset, we will create two `vocabulary`. A vocabulary is a mapping of characters or words to integers. For example, the letter `b` will be assigned the number `1`, and the word `Network` the number `2504`. Every character in our dataset will be assigned a number, and the most common 50,000 words will be assigned a number, the less frequent words will be replace with a special id of `|UNK|`.
+The generation of grammatical mistakes is performed using regular expressions. For example, one regular expression could look for words ending with *"er"* and replace them with *"é"*. Another could look for *"laquelle"* and replace it with *"lequel"*. 
 
-We can now create our dataset. It will consist of `tf.record` files filled with `tf.example`. Each entry will consist of:
-1. The encoded input sentence, i.e., an array of integers. Each interger representing the associated character from the `dictionary`.
-2. The input sentence length, i.e, the number of words in this sentence.
-3. The correct output sentence, encoded word wise (not characters wise!).
-4. The correct output sentence length.
-This dataset will be split up in three parts: traning (99%), validation (1%) and testing (1%).
+Now that we have a set of erroneous sentences along with their correction, we can generate the vocabularies and the input files. As the input to the model is character based, we will go through the entire corpus and make a character vocabularry (of around 300 characters). For the output of the model, we will use byte-pair-encoding (Senrich et al., 2015) as in *Attention Is All You Need*. This method will create a fixed vocabulary (15,000 entries in our case) of the most frequent pattern in the corpus. This allows the model to break previously unseen words in multiple tokens, eliminating the problem of out-of-vocabulary errors. 
 
-## Model Definition
-The model definition follows the implementation of Schmaltz and Kim in [*Sentence-Level Grammatical Error Identification as Sequence-to-Sequence Correction*](https://arxiv.org/abs/1604.04677).
-<p align="center" >
-<img src="https://github.com/maximedb/instacorrect/blob/master/Misc/model_arch.PNG" alt="Model from Schamtz & Kim">
-</p>
 
-1. The inputs are the characters from erroneous sentences batched together: `[batch_size, max_sentence_length, max_word_length]`
-   The inputs are zero padded.
-2. The inputs are then embedded in a vector of dimension 30. The result is a tensor of shape `[batch_size, max_sentence_length, max_word_length, embedded_size]`
-2. Many convolutional layer are then applied on these inputs, one word at a time. The result is a word embedding for each word in the dataset. Note that this embedding is not subject to out of vocabulary issues.
-3. A two layer LSTM with 512 hidden units is applied on the word embeddings.
-4. The final output of the LSTM is given to a decoder, a two layer LSTM with 512 hidden units. At each timestep a soft luong attention is performed on the encoder's ouput.
-4. A dense linear layer with a softmax activation is applied on the final output of the LSTM to predict the next word id.
-The loss is defined as the softmax cross entropy. It is minimized with the AdamOptimizer and gradient clipping.
+## Model
+The model is a mixture of Schmatlz et al., 2014 and Vaswani et al., 2017. It implements a **character-based self-attention sequence-to-sequence model**. 
 
-## Training and Inference
+### Character based convolution
+The input to the model looks like this a matrix `[batch_size, sentence_length, word_length]`. The first step is to use a embedding matrix to replace each character id with a fixed size vector. Our inputs now have the following shape: `[batch_size, sentence_length, word_length, char_embedding_size]`. This work uses a character embedding size of 15. 
+
+The next step is to apply a convolution on each word in the inputs. Each word can be represented as a matrix of size: `[word_length, char_embedding_size]`, like a picture but with only one channel. To this end we will apply a 1D convolution with several filters sizes (2, 3, 4 and 5) with a varying number of kernels per filter size. After each convolution, a non-linearity is applied along with a max-over-time pooling. 
+At the end of the process, each word is represented by a fixed size vector. The model is now able to input previously unseen words. 
+
+<insert picture from Kim here>
+   
+### Self-Attention
+Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). Look at the following illustration from the Google Research Blog. 
+
+<insert picture from Google Research>
+   
+Besides self-attention, the architecture has many other elements:
+- Positional encoding: each input and output is added (yes addition) to a positional vector that is dependent on its position on the sequence, to give a sense of position to the model.
+- Multi-head attention: each input is projected h times with different learned projections. According ot Vaswani et al. it allows the model to jointly attend to information from different representations subspaces at different positions.
+- Residual connection: at each node in the self-attention model, the input of this node is added to the output of the model. 
+- Layer Normalization: at each node the output of the model is normalized.
+
+<insert pictures from self-attention model>
+
+At training time, the model must predict the right output given the encoder's output and the decoder input for this timestep.
+This means that we can train the entire model at once, without waiting for the previous output to finish. Speeding up the training time. To prevent the model from looking "in the future", the future's decoder inputs are masked et training time.
+
+However during inference, the logic is a bit different since we do not have the decoder's input. We must then implement a while loop that will compute each timestep with as inputs, the encoder's output and all the previously generated output (the first one being the "GO" id, as during training). According to me, inference is not enough explained in *Attention Is All You Need*.
+
+## Results
 The training and inference is done using a Tensorflow estimator. It is really useful and lets you focus on the essential part of the model and not the usual plumbing associated with running a tensorflow model. Furthermore, it is really easy to export a trained model using an estimator. The model reads examples using a tf.dataset. This functionality is great to read large files that would not fit into memory. Furthermore, there is a **dyanmic padding and bucketing** of the examples as to optimize the training time.
 
-## Model Serving
+## Discussion
+
+## Conclusion
 Once a model is trained, it can be exported. It can be served to the "real world" with tensorflow serving. Tensorflow serving is not the easiest thing to grasp. It is not well documented, uses C++ code, the installation process is not clear, etc. Tensorflow serving is a program that lets you put your model on a server. This server accepts gRPC requests and returns the output of the model. In theory it sounds easy, in practice it not that easy.
 
 Google released a binary that you can download using apt-get. This makes it much more easier. You just download this binary and execute it. It will launch your server. This server expects to find exported models in a directory you specified. In this directory you simply copy-paste your saved model from earlier. That's it. You can customize it more, but it does the job.
