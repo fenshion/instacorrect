@@ -43,7 +43,7 @@ At the end of the process, each word is represented by a fixed size vector. The 
 </p>
 
 #### Self-Attention
-The next step is to give this word embedding to the encoder layer. Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). Look at the following illustration from the Google Research Blog.
+Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). The following illustration from the Google Research Blog illustrates well the general intuition behind the model.
 
 <p align="center"> 
   <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/transformer.gif" width="350" align="center">
@@ -51,11 +51,15 @@ The next step is to give this word embedding to the encoder layer. Instead of re
 
 A self-attention model is divided into two parts: the encoder and the decoder.
 
-##### Encoder
+The encoder performs several steps of self-attention with its inputs as key, values and queries. Each word will be more or less represented as the weighted average of its projection against all of the other inputs in the sentence. At every step, each word is augmented with the information surrounding it. 
 
-The encoder performs several stack of self-attention with its inputs as key, values and queries. Each word will be more or less represented as the weighted average of its projection against all of the other inputs in the sentence. At each stack, each word is augmented with the information surround it. The actual implementation is more complicated, but that is the basic idea behind it. 
+The decoding is performed in two steps. The first attention step is to compared the decoder's inputs against the ***encoder***'s outputs. The second attention step is to compare the result of the first step against the previously computed decoder's output.  
 
-The decoder is performed in two steps. The first attention step is to compared the decoder's inputs against the ***encoder***'s outputs. The second attention step is to compare the result of the first step against the previously computed decoder's output.  
+The final step is to perform a softmax on the logits of the final layer to draw of probability distribution over each possible token.
+
+<p align="center"> 
+  <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/attention.PNG" width="332" align="center">
+</p>
 
 Besides self-attention, the architecture implements many other elements:
 - __Positional encoding__: each input and output is added (yes addition) to a positional vector that is dependent on its position on the sequence, to give a sense of position to the model.
@@ -65,14 +69,10 @@ Besides self-attention, the architecture implements many other elements:
 - __Label Smoothing__: at each node the output of the model is normalized.
 - __Attention Dropout__: at each node the output of the model is normalized.
 
-<p align="center"> 
-  <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/attention.PNG" width="332" align="center">
-</p>
+At training time, the model must predict the right output given the encoder's output and the decoder input.
+This means that we can train the entire model at once, without waiting for the previous output to finish, speeding up the training time. To prevent the model from looking "into the future", the future's decoder inputs are masked et training time.
 
-At training time, the model must predict the right output given the encoder's output and the decoder input for this timestep.
-This means that we can train the entire model at once, without waiting for the previous output to finish. Speeding up the training time. To prevent the model from looking "in the future", the future's decoder inputs are masked et training time.
-
-However during inference, the logic is a bit different since we do not have the decoder's input. We must then implement a while loop that will compute each timestep with as inputs, the encoder's output and all the previously generated output (the first one being the "GO" id, as during training). According to me, inference is not enough explained in *Attention Is All You Need*.
+During inference, the logic is a bit different since we do not have the decoder's input. We must then implement a while loop that will compute each timestep. The inputs for each timestep is the encoder's output and all the previously generated output (the first one being the "GO" id, as during training).
 
 ## Results
 The training and inference is done using a Tensorflow estimator. It is really useful and lets you focus on the essential part of the model and not the usual plumbing associated with running a tensorflow model. Furthermore, it is really easy to export a trained model using an estimator. The model reads examples using a tf.dataset. This functionality is great to read large files that would not fit into memory. Furthermore, there is a **dyanmic padding and bucketing** of the examples as to optimize the training time.
