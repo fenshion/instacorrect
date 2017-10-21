@@ -40,13 +40,16 @@ The input to the model looks like this a matrix `[batch_size, sentence_length, w
 
 The next step is to apply a convolution on each word in the inputs. Each word can be represented as a matrix of size: `[word_length, char_embedding_size]`, like a picture but with only one channel. To this end we will apply a 1D convolution with several filters sizes (2, 3, 4 and 5) with a varying number of kernels per filter size. After each convolution, a non-linearity is applied along with a max-over-time pooling.
 At the end of the process, each word is represented by a fixed size vector. The model is now able to input previously unseen words.
-
-![Image from Kim](https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/kim.PNG)
+<p align="center"> 
+  <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/kim.PNG" width="350" align="center">
+</p>
 
 ### Self-Attention
 Instead of relying on RNN cells, self-attention models rely entirely on an attention mechanism to draw global dependencies between input and output (Vaswani et al., 2017). Look at the following illustration from the Google Research Blog.
 
-![Image from Google Research](https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/transformer.gif)
+<p align="center"> 
+  <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/transformer.gif" width="350" align="center">
+</p>
 
 Besides self-attention, the architecture has many other elements:
 - Positional encoding: each input and output is added (yes addition) to a positional vector that is dependent on its position on the sequence, to give a sense of position to the model.
@@ -54,7 +57,9 @@ Besides self-attention, the architecture has many other elements:
 - Residual connection: at each node in the self-attention model, the input of this node is added to the output of the model.
 - Layer Normalization: at each node the output of the model is normalized.
 
-![Image from Vaswani](https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/attention.PNG)
+<p align="center"> 
+  <img src="https://raw.githubusercontent.com/maximedb/instacorrect/master/Misc/attention.PNG" width="332" align="center">
+</p>
 
 At training time, the model must predict the right output given the encoder's output and the decoder input for this timestep.
 This means that we can train the entire model at once, without waiting for the previous output to finish. Speeding up the training time. To prevent the model from looking "in the future", the future's decoder inputs are masked et training time.
