@@ -60,7 +60,7 @@ def bucketing_fn(sequence_length, buckets):
 def reduc_fn(key, elements, window_size):
     """ Receives `window_size` elements """
     # Shuffle within each bucket
-    return elements.shuffle(window_size, seed=0)
+    return elements
 
 
 def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
@@ -85,7 +85,7 @@ def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
     # Create an arbitrary bucket range.
     buckets = [tf.constant(num, dtype=tf.int64) for num in range(0, 150, 2)]
     # Number of elements per bucket.
-    window_size = 1000*batch_size
+    window_size = 10*batch_size
     # Group the dataset according to a bucket key (see bucketing_fn).
     # Every element in the dataset is attributed a key (here a bucket id)
     # The elements are then bucketed according to these keys. A group of

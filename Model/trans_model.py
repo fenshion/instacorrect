@@ -6,7 +6,7 @@ Created on Wed Sep 27 21:39:53 2017
 """
 
 import tensorflow as tf
-from trans_modules import char_convolution, project_embedding
+from trans_modules import char_convolution, project_embedding, initializer
 from trans_modules import multihead_attention, encode_positions, feed_forward
 from trans_modules import decode_step, is_eos, positional_encoding_table, make_logits
 
@@ -52,7 +52,8 @@ def transformer(features, labels, mode, params):
                                        kernel_features, c_embed_s, hidden_size,
                                        reuse=None)
         # Map the result to the 512 dimension
-        conv_outputs = tf.layers.dense(conv_inputs, 512)
+        conv_outputs = tf.layers.dense(conv_inputs, 512,
+                                       kernel_initializer=initializer)
     with tf.variable_scope('Encoder'):
         # Positional Embeddings
         position_emb = encode_positions(position_embed_table, conv_outputs)
@@ -138,7 +139,6 @@ def transformer(features, labels, mode, params):
             decoder_i = decoder_inpt[:, :-1]
             decoder_i = tf.nn.embedding_lookup(embeddings_w, decoder_i)
             decoder_i = project_embedding(decoder_i, hidden_size)
-            print(decoder_o)
             # Get the positional embeddings
             output_position_emb = encode_positions(position_embed_table,
                                                    decoder_i)
@@ -157,6 +157,13 @@ def transformer(features, labels, mode, params):
         logits = make_logits(decoder_outputs, vocab_size_word, reuse=reuse)
         # Take the arg max for each, ie, the word id.
         preds = tf.cast(tf.argmax(logits, axis=2), tf.int32)
+        # preds = tf.Print(preds, [preds[0, :]], message="preds1", summarize=10)
+        # preds = tf.Print(preds, [logits[0, :]], message="logits", summarize=10)
+        # preds = tf.Print(preds, [decoder_inpt[0, :]], message="decoder_i1", summarize=10, first_n=1)
+        # preds = tf.Print(preds, [decoder_o[0, :]], message="decoder_o1", summarize=10, first_n=1)
+        # preds = tf.Print(preds, [preds[1, :]], message="preds2", summarize=10)
+        # preds = tf.Print(preds, [decoder_inpt[1, :]], message="decoder_i2", summarize=10, first_n=1)
+        # preds = tf.Print(preds, [decoder_o[1, :]], message="decoder_o2", summarize=10, first_n=1)
         if mode == tf.estimator.ModeKeys.PREDICT:
             # Return a dict with the sample word ids.
             preds = {'sequence': preds}

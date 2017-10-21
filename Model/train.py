@@ -21,7 +21,7 @@ word_vocab = get_vocab('../Data/data/bpe/apply_bpe.txt.json')
 reve_vocab = get_vocab('../Data/data/bpe/apply_bpe.txt_reve.json')
 # Parameters given to the estimator. Mainly the size of the vocabulary
 # The batch size to use for the train/valid/test set
-batch = 18
+batch = 12
 # the embedding size to use and the (keep) drop out percentage
 model_params = {'char_vocab_size': len(char_vocab),
                 'word_vocab_size': len(word_vocab),
@@ -29,12 +29,12 @@ model_params = {'char_vocab_size': len(char_vocab),
                 'word_embedding_size': 125,
                 'dropout': 0.2,
                 'hidden_size': 512,
-                'learning_rate': 0.001,
+                'learning_rate': 0.00001,
                 'decay_steps': 100000,
                 'kernels': [2, 3, 4, 5, 6],
                 'kernel_features': [50, 100, 150, 200, 200],
                 'ultimate_sequ_len': 100,
-                'num_blocks': 6,
+                'num_blocks': 3,
                 'attention_heads': 8,
                 'go_id': word_vocab['GOO'],
                 'eos_id': word_vocab['EOS']}
