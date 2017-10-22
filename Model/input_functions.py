@@ -118,10 +118,11 @@ def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
 def serving_input_receiver_fn():
     """An input receiver that expects a serialized tf.Example."""
     # Placeholder for the tf.example to be received
-    serialized_tf_example = tf.placeholder(dtype=tf.string, shape=None)
+    serialized_tf_example = tf.placeholder(dtype=tf.string, shape=[None])
     # Dict to be passed to ServingInputReceiver -> input signature
     receiver_tensors = {'examples': serialized_tf_example}
-    input_s, input_sl = _parse_function(serialized_tf_example,
+    input_s, input_sl = _parse_function(serialized_tf_example[0],
                                         at_training=False)
-    features = {'sequence': input_s, 'sequence_length': input_sl}
+    features = {'sequence': tf.expand_dims(input_s, 0),
+                'sequence_length': tf.expand_dims(input_sl, 0)}
     return tf.estimator.export.ServingInputReceiver(features, receiver_tensors)

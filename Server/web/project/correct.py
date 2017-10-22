@@ -6,22 +6,23 @@ from nltk.tokenize import word_tokenize
 from nltk.tokenize.moses import MosesDetokenizer
 import tensorflow as tf
 import io
+import sys
 import json
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def get_vocab(filename, multiple_lines=False):
+    with io.open(filename, 'r', encoding='utf8') as fin:
+        vocab = json.load(fin)
+    return vocab
 
 # Load the character vocabulary
-with io.open("/app/data/vocab/char_vocab_dict.json",
-             'r', encoding='utf8') as fin:
-        char_vocab = json.loads(fin.readline())
-
-# Load the word vocabulary
-with io.open("/app/data/vocab/words_vocab_dict.json",
-             'r', encoding='utf8') as fin:
-        word_vocab = json.loads(fin.readline())
-
-# Load the rverse word vocabulary
-with io.open("/app/data/vocab/words_vocab_reve.json",
-             'r', encoding='utf8') as fin:
-        reve_word_vocab = json.loads(fin.readline())
+char_vocab = get_vocab("/app/data/vocab/char_vocab_dict.json")
+logger.debug('char_vocab %s', char_vocab)
+word_vocab = get_vocab("/app/data/vocab/words_vocab_dict.json")
+reve_word_vocab = get_vocab("/app/data/vocab/words_vocab_reve.json")
 
 detokenizer = MosesDetokenizer()
 eos = word_vocab['EOS']
@@ -47,6 +48,7 @@ def correct_sentence(sentence):
 
 
 def decode_sentence(sample_ids):
+    print(sample_ids, file=sys.stderr)
     decoded = [reve_word_vocab[str(ids)] for ids in sample_ids if ids != eos]
     decoded = detokenizer.detokenize(decoded, return_str=True)
     return decoded.capitalize()
@@ -55,6 +57,7 @@ def decode_sentence(sample_ids):
 def create_example(line, vocab):
     """Given a string and a label (and a vocab dict), returns a tf.Example"""
     seq, seq_l, max_word = encode_line_charwise(line, vocab)
+    logger.debug('seq %s', seq)
     features = {'input_sequence': _int64_feature(seq),
                 'input_sequence_length': _int64_feature([seq_l]),
                 'input_sequence_maxword': _int64_feature([max_word])}
@@ -72,10 +75,11 @@ def encode_line_charwise(line, vocab):
     sequence = []
     pad_char = vocab.get('|PAD|')
     for word in splited:
-        word_encoded = [vocab.get('{')] + [vocab.get(char, vocab['|UNK|'])
+        word_encoded = [vocab.get('{')] + [vocab.get(char, vocab[' '])
                                            for char in word] + [vocab.get('}')]
         word_encoded += [pad_char]*(max_word_length - len(word_encoded))
         sequence.extend(word_encoded)
+    # print(sequence, file=sys.stderr)
     return sequence, sequence_length, max_word_length
 
 
