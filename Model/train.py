@@ -110,6 +110,8 @@ def inference(rng):
 def export():
     """Export the last saved graph"""
     # Create a run config
+    model_params['dropout'] = 0
+
     config = tf.contrib.learn.RunConfig(save_checkpoints_secs=60*30,
                                         log_device_placement=True,
                                         tf_random_seed=0,
