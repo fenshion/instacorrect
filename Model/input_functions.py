@@ -63,7 +63,7 @@ def reduc_fn(key, elements, window_size):
     return elements
 
 
-def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
+def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0, train=True):
     """
     Function to perform the data pipeline for the model.
     Should be wrapped around an anonymous function to set the parameters.
@@ -90,11 +90,12 @@ def input_fn(filenames, batch_size, num_epochs, take=-1, skip=0):
     # Every element in the dataset is attributed a key (here a bucket id)
     # The elements are then bucketed according to these keys. A group of
     # `window_size` having the same keys are given to the reduc_fn.
-    dataset = dataset.group_by_window(lambda a, b, c, d:
-                                      bucketing_fn(b, buckets),
-                                      lambda key, x:
-                                      reduc_fn(key, x, window_size),
-                                      window_size)
+    if train:
+        dataset = dataset.group_by_window(lambda a, b, c, d:
+                                          bucketing_fn(b, buckets),
+                                          lambda key, x:
+                                          reduc_fn(key, x, window_size),
+                                          window_size)
     # We now have buckets of `window_size` size, let's batch and pad them
     dataset = dataset.padded_batch(batch_size, padded_shapes=(
         (tf.Dimension(None), tf.Dimension(None)),

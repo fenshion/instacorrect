@@ -34,8 +34,8 @@ def transformer(features, labels, mode, params):
         num_heads = params['attention_heads']
         eos = params['eos_id']
         go = params['go_id']
-        position_embed_table = positional_encoding_table(ultimate_sequ_len,
-                                                         hidden_size)
+        position_table = positional_encoding_table(ultimate_sequ_len,
+                                                   hidden_size)
         embeddings_c = tf.Variable(tf.random_uniform([vocab_size_char,
                                                       c_embed_s], -1.0, 1.0))
         embeddings_w = tf.Variable(tf.random_uniform([vocab_size_word,
@@ -56,7 +56,7 @@ def transformer(features, labels, mode, params):
                                        kernel_initializer=initializer)
     with tf.variable_scope('Encoder'):
         # Positional Embeddings
-        position_emb = encode_positions(position_embed_table, conv_outputs)
+        position_emb = encode_positions(position_table, conv_outputs)
         conv_outputs = position_emb + conv_outputs
         # Encode inputs
         encoder_inputs = tf.layers.dropout(conv_outputs, rate=dropout)
@@ -77,59 +77,47 @@ def transformer(features, labels, mode, params):
         # Decoder
         # Seperate for training and inference
         if mode == tf.estimator.ModeKeys.PREDICT:
-            # We need to tile it to the correct_batch_size
-            go_char = tf.tile(tf.reshape(go, [1, 1]), [batch_size, 1])
-            # Embed the characters
-            decoder_inputs = tf.nn.embedding_lookup(embeddings_w, go_char)
-            decoder_inputs = project_embedding(decoder_inputs, hidden_size)
-            # Get the positional embeddings
-            output_pos_embbed = encode_positions(position_embed_table,
-                                                 decoder_inputs)
-            # # Add the positional embeddings
-            decoder_inputs += output_pos_embbed
-
-            def greedy_infer_step(i, decoder_inputs):
+            def greedy_infer_step(i, decoder_inputs, decoder_outputs):
                 """ Perfom a one step greedy inference step """
-                previous_inputs = decoder_inputs
-                decoder_inputs = decoder_inputs[:, -1, :]
-                decoder_inputs = tf.expand_dims(decoder_inputs, axis=1)
-                decoder_output = decode_step(encoder_outputs, decoder_inputs,
-                                             num_blocks)
-                logits = make_logits(decoder_output, vocab_size_word)
+                # Embed the characters
+                decoder_inputs = tf.Print(decoder_inputs, [decoder_inputs], message="decoder_inputs")
+                decoder_outputs = tf.Print(decoder_outputs, [decoder_outputs], message="decoder_outputs")
+                inputs = tf.nn.embedding_lookup(embeddings_w, decoder_inputs)
+                inputs = project_embedding(inputs, hidden_size)
+                # Get the positional embeddings
+                output_pos_embbed = encode_positions(position_table, inputs)
+                # # Add the positional embeddings
+                inputs += output_pos_embbed
+                output = decode_step(encoder_outputs, inputs, num_blocks,
+                                     dropout, num_heads)
+                logits = make_logits(output, vocab_size_word)
                 preds = tf.cast(tf.argmax(logits, axis=-1), tf.int32)
+                preds = tf.Print(preds, [preds], message="preds", summarize=10)
+                # Add these preds to the inputs
+                latest_preds = tf.expand_dims(preds[:, -1], 1)
+                decoder_inputs = tf.concat([decoder_inputs, latest_preds], axis=1)
+                decoder_outputs = output
+                i = tf.add(i, 1)
+                return i, decoder_inputs, decoder_outputs
+
+            def condition(i, decoder_inputs, decoder_outputs):
                 # Check if EOS
-                i = tf.cond(is_eos(preds, eos, batch_size),
+                i = tf.cond(is_eos(decoder_inputs, eos),
                             lambda: tf.add(i, 10000),
                             lambda: tf.add(i, 1))
                 i = tf.Print(i, [i], message="i")
-                preds = tf.Print(preds, [preds], message="preds")
-                # Check in the preds if there all the sentences are EOS.
-                # If yes assign +inf to i else increment i by one.
-                # Take the preds and find their char rep in the hashtable
-                # Convert the sparse tensor from the hashtable to a dense repr.
-                # then prepare_encoder_inputs with the dense tensor
-                # This is the new deocder_inputs
-                preds_embed = tf.nn.embedding_lookup(embeddings_w, preds)
-                preds_embed = project_embedding(preds_embed, hidden_size,
-                                                reuse=True)
-                position_emb = encode_positions(position_embed_table,
-                                                preds_embed,
-                                                inference=True,
-                                                i=i)
-                preds_output = preds_embed + position_emb
-                # Concat this step's results with the previous steps results
-                decoder_output = tf.concat([previous_inputs, preds_output],
-                                           axis=1)
-                decoder_output = tf.Print(decoder_output, [tf.shape(decoder_output)], message="decoder_output")
-                return i, decoder_output
-
-            def condition(i, decoder_inputs):
                 return tf.less(i, timesteps*2)
+
             i = tf.constant(0, dtype=tf.int32)
-            tshape = [i.get_shape(), tf.TensorShape([None, None, hidden_size])]
-            i, decoder_outputs = tf.while_loop(condition, greedy_infer_step,
-                                               [i, decoder_inputs],
-                                               shape_invariants=tshape)
+            tshape = [i.get_shape(), tf.TensorShape([None, None]),
+                      tf.TensorShape([None, None, hidden_size])]
+            go_char = tf.tile(tf.reshape(go, [1, 1]), [batch_size, 1])
+            outputs = tf.tile(tf.reshape(tf.constant(0, dtype=tf.float32),
+                                         [1, 1, 1]),
+                              [batch_size, 1, hidden_size])
+            i, _, decoder_outputs = tf.while_loop(condition, greedy_infer_step,
+                                                  [i, go_char, outputs],
+                                                  shape_invariants=tshape)
         else:
             # Training time
             # Embed the word ids
@@ -140,14 +128,14 @@ def transformer(features, labels, mode, params):
             decoder_i = tf.nn.embedding_lookup(embeddings_w, decoder_i)
             decoder_i = project_embedding(decoder_i, hidden_size)
             # Get the positional embeddings
-            output_position_emb = encode_positions(position_embed_table,
+            output_position_emb = encode_positions(position_table,
                                                    decoder_i)
             # Add the positional embeddings
             decoder_i += output_position_emb
             # Add dropout on the decoder inputs.
             decoder_i = tf.layers.dropout(decoder_i, rate=dropout)
             decoder_outputs = decode_step(encoder_outputs, decoder_i,
-                                          params['num_blocks'])
+                                          num_blocks, dropout, num_heads)
         # End of IF
         # Project the decoder output to a word_vocab_size dimension
         if mode == tf.estimator.ModeKeys.PREDICT:
@@ -185,11 +173,11 @@ def transformer(features, labels, mode, params):
     # Train
     with tf.variable_scope('train'):
         if mode == tf.estimator.ModeKeys.TRAIN:
-            lr = tf.train.exponential_decay(params['learning_rate'],
-                                            tf.train.get_global_step(),
-                                            params['decay_steps'],
-                                            0.96, staircase=True)
-            optimizer = tf.train.AdamOptimizer(lr)
+            # lr = tf.train.exponential_decay(params['learning_rate'],
+            #                                 tf.train.get_global_step(),
+            #                                 params['decay_steps'],
+            #                                 0.96, staircase=True)
+            optimizer = tf.train.AdamOptimizer(params['learning_rate'])
             # Apply gradient clipping
             gradients, variables = zip(*optimizer.compute_gradients(loss))
             gradients, _ = tf.clip_by_global_norm(gradients, 1.0)

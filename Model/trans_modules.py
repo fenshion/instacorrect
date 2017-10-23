@@ -50,6 +50,10 @@ def char_convolution(inputs, kernels, kernel_features, c_embed_s,
         # Reshape it to match sequence length
         cnn_output = tf.reshape(cnn_output, [batch_si, s_length,
                                 sum(kernel_features)])
+        cnn_output = highway(cnn_output, sum(kernel_features),
+                             scope="highway_1")
+        cnn_output = highway(cnn_output, sum(kernel_features),
+                             scope="highway_2")
         cnn_output = tf.layers.dense(cnn_output, hidden_size)
         return cnn_output * (hidden_size ** 0.5)
 
@@ -188,32 +192,41 @@ def label_smoothing(inputs, epsilon=0.1):
     return ((1-epsilon) * inputs) + (epsilon / K)
 
 
-def is_eos(inputs, eos, batch_size):
+def is_eos(inputs, eos):
+    batch_size = tf.shape(inputs)[0]
     equal = tf.equal(inputs, eos)
     axis_reduc = tf.reduce_sum(tf.cast(equal, tf.float32), axis=0)
     is_eos = tf.reduce_sum(axis_reduc)
     return tf.equal(is_eos, tf.cast(batch_size, tf.float32))
 
 
-def decode_step(encoder_outputs, decoder_inputs, num_blocks, reuse=None):
+def decode_step(encoder_outputs, decoder_inputs, num_blocks, dropout, num_head,
+                reuse=None, inference=False):
     """ Perform a decode step on a given set of encoder_outputs
     and decoder_inputs."""
     for i in range(num_blocks):
         with tf.variable_scope('num_blocks_{}'.format(i), reuse=reuse):
             # Multihead attention (self attention)
-            decoder_outputs = multihead_attention(queries=decoder_inputs,
-                                                  keys=encoder_outputs,
+            # Masked multihead attention. If at inference time, should only
+            # use the last decoder_inputs as the query.
+            if inference:
+                scnd_input = tf.expand_dims(decoder_inputs[:, -1, :], 1)
+            else:
+                scnd_input = decoder_inputs
+            decoder_outputs = multihead_attention(queries=scnd_input,
+                                                  keys=decoder_inputs,
                                                   num_units=512,
-                                                  num_heads=8,
-                                                  dropout=0.8,
+                                                  num_heads=num_head,
+                                                  dropout=dropout,
                                                   causality=True,
                                                   scope="self_attention",
                                                   reuse=reuse)
-            decoder_outputs = multihead_attention(queries=decoder_inputs,
-                                                  keys=decoder_outputs,
+            # Multi head attention on the encoder's ouput
+            decoder_outputs = multihead_attention(queries=decoder_outputs,
+                                                  keys=encoder_outputs,
                                                   num_units=512,
-                                                  num_heads=8,
-                                                  dropout=0.8,
+                                                  num_heads=num_head,
+                                                  dropout=dropout,
                                                   causality=False,
                                                   scope="vanilla_attention",
                                                   reuse=reuse)
@@ -256,3 +269,13 @@ def make_logits(inputs, out_dim, scope="final_layer", reuse=None):
                                  kernel_initializer=initializer,
                                  name="projection_layer")
     return logits
+
+
+def highway(x, size, carry_bias=-1.0, scope="highway"):
+    with tf.variable_scope(scope):
+        T = tf.layers.dense(x, size, name="transform_gate")
+        T = tf.nn.softmax(T)
+        H = tf.layers.dense(x, size, activation=tf.nn.relu, name="activation")
+        C = tf.subtract(1.0, T, name="carry_gate")
+        y = tf.add(tf.multiply(H, T), tf.multiply(x, C), "y")
+        return y

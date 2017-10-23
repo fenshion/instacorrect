@@ -21,7 +21,7 @@ word_vocab = get_vocab('../Data/data/bpe/apply_bpe.txt.json')
 reve_vocab = get_vocab('../Data/data/bpe/apply_bpe.txt_reve.json')
 # Parameters given to the estimator. Mainly the size of the vocabulary
 # The batch size to use for the train/valid/test set
-batch = 12
+batch = 18
 # the embedding size to use and the (keep) drop out percentage
 model_params = {'char_vocab_size': len(char_vocab),
                 'word_vocab_size': len(word_vocab),
@@ -32,14 +32,14 @@ model_params = {'char_vocab_size': len(char_vocab),
                 'learning_rate': 0.00001,
                 'decay_steps': 100000,
                 'kernels': [2, 3, 4, 5, 6],
-                'kernel_features': [50, 100, 150, 200, 200],
+                'kernel_features': [100, 100, 150, 200, 200],
                 'ultimate_sequ_len': 100,
-                'num_blocks': 3,
+                'num_blocks': 4,
                 'attention_heads': 8,
                 'go_id': word_vocab['GOO'],
                 'eos_id': word_vocab['EOS']}
 # The number of times to train the model on the entire dataset
-epochs = 100000
+epochs = 1
 # The part of the dataset that will be skipped to be used by the training
 # and testing dataset
 # Lambda function used in the experiment. Returns a dataset iterator
@@ -83,7 +83,7 @@ def inference(rng):
     """Perform an inference on the latest checkpoint available"""
     # Lambda function used in the experiment. Returns a dataset iterator
     data_test = lambda: input_fn("../Data/data/validation.tfrecord", 5, 1,
-                                 take=10)
+                                 take=10, train=False)
     # Create a run config
     config = tf.contrib.learn.RunConfig(save_checkpoints_secs=60*60,
                                         log_device_placement=True,
@@ -91,6 +91,7 @@ def inference(rng):
                                         save_summary_steps=1000)
     # Create the estimator, the actual RNN model, with the defined directory
     # for storing files, the parameters, and the config.
+    model_params['dropout'] = 0
     estimator = tf.estimator.Estimator(model_fn=transformer,
                                        model_dir="output/",
                                        params=model_params,
